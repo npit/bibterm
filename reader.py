@@ -14,7 +14,6 @@ def customizations(record):
     record = customization.editor(record)
     record = customization.journal(record)
     record = customization.keyword(record)
-    
 
     # customization for 'keywords' (plural) field
     sep=',|;'
@@ -35,15 +34,15 @@ def customizations(record):
 
 
 # Read bibtex file, preprocessing out comments
-def read(basefilename):
-    preprofilename = "{}.prepro".format(basefilename)
-    outfilename = "{}.out".format(basefilename)
+def read(bib_filepath):
+    preprofilename = "{}.prepro".format(bib_filepath)
+    outfilename = "{}.out".format(bib_filepath)
 
     if not exists(outfilename):
         if not exists(preprofilename):
             # preprocess
             applied_changes = False
-            with open(basefilename) as f:
+            with open(bib_filepath) as f:
                 newlines = []
                 for line in f:
                     if line.startswith("%"):
@@ -63,6 +62,6 @@ def read(basefilename):
         parser = BibTexParser()
         parser.customization = customizations
         content = bibtexparser.load(f, parser=parser)
-        print("Loaded {} entries.".format(len(content.entries)))
+        print("Loaded {} entries from {}.".format(len(content.entries), bib_filepath))
     return content
 
