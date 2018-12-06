@@ -1,7 +1,7 @@
 import json
 from collections import namedtuple, OrderedDict
-from fuzzywuzzy import process
-
+from reader import Reader
+from visual import setup
 # do not use curses, try
 #     http: // urwid.org / tutorial /
 #     or
@@ -10,6 +10,78 @@ from fuzzywuzzy import process
 def loop(runner):
     runner.loop()
 
+class EntryCollection:
+    def __init__(self, bib_db):
+        self.bibtex_db = bib_db
+        self.title2id = {}
+        self.entries = {}
+        self.maxlen_id = 0
+        self.maxlen_title = 0
+        self.id_list = []
+        self.title_list = []
+        for entry in bib_db.entries:
+            ent = Entry(entry)
+            self.insert(ent)
+
+    def only_keep(self, keep_ids):
+        for ID in self.id_list:
+            if ID in keep_ids:
+                continue
+            title = self.entries[ID].title.lower()
+            self.id_list.remove(ID)
+            del self.entries[ID]
+            self.title_list.remove(title)
+            del self.title2id[title]
+
+    def insert_new(self, ent):
+        self.insert(ent)
+        # update underlying bibtex database
+        self.bibtex_db.entries.append(ent.raw_dict)
+        self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
+
+    def insert(self, ent):
+        ID = ent.ID.lower()
+        title = ent.title.lower()
+        # update object lookup dict
+        self.entries[ID] = ent
+        # update title-id mapping
+        self.title2id[title] = ent.ID.lower()
+        # update ids and titles lists
+        self.id_list.append(ID)
+        self.title_list.append(title)
+        # update maximum ID / title lengths
+        if len(ent.ID) > self.maxlen_id:
+            self.maxlen_id = len(ent.ID)
+        if len(ent.title) > self.maxlen_title:
+            self.maxlen_title = len(ent.title)
+
+    def get_writable_db(self):
+        stringify_keys = ["author", "keywords", "journal", "link"]
+        for key in stringify_keys:
+            for i in range(len(self.bibtex_db.entries)):
+                print(self.bibtex_db.entries[i]["ID"])
+                if key not in self.bibtex_db.entries[i]:
+                    continue
+                print(key, self.bibtex_db.entries[i][key])
+                if type(self.bibtex_db.entries[i][key]) != str:
+                    self.bibtex_db.entries[i][key] = ", ".join(self.bibtex_db.entries[i][key])
+            for ID in self.bibtex_db.entries_dict:
+                print(ID)
+                if key not in self.bibtex_db.entries_dict[ID]:
+                    continue
+                print(key, self.bibtex_db.entries_dict[ID][key])
+                if type(self.bibtex_db.entries_dict[ID][key]) != str:
+                    self.bibtex_db.entries_dict[ID][key] = ", ".join(self.bibtex_db.entries_dict[ID][key])
+        return self.bibtex_db
+    
+
+
+
+
+
+
+    
+            
 class Entry:
     ENTRYTYPE = None
     ID = None
@@ -33,8 +105,6 @@ class Entry:
     volume = None
     year = None
 
-    visual = None
-
     def __init__(self, kv):
         for key in kv:
             self.__setattr__(key, kv[key])
@@ -53,80 +123,35 @@ class Entry:
         return d
 
 
-# base class to get and print stuff
-class Visualizer:
-    def idle(self):
-        print("Give command: ", end="")
-
-    def list(self, content):
-        pass
-
-    def print(self, msg):
-        print(msg)
-
-    def input(self,msg=""):
-        return input(msg)
-
-    def search(self, query, candidates, atmost):
-        return process.extract(query, candidates, limit=atmost)
-
-    def newline(self):
-        print()
-
-
-class Blessings(Visualizer):
-    def idle(self):
-        print("Give command.")
-
-    def print(self, msg):
-        print(msg)
-
-    def input(self, msg=""):
-        return input(msg)
-
-    def search(self, query, candidates, atmost):
-        return process.extract(query, candidates, limit=atmost)
-
-    def newline(self):
-        print()
-
 
 class Runner:
 
     max_search = 10
 
-    def __init__(self, content, conf):
-        self.line = 0
-        self.title2id = {}
-        self.entries = {}
-        self.maxlen_id = 0
-        self.maxlen_title = 0
-        self.id_list = []
+    def __init__(self, conf, entry_collection=None):
+        # read the bib database
+        if entry_collection is None:
+            rdr = Reader(conf)
+            rdr.read()
+            self.entry_collection = EntryCollection(rdr.get_content().entries)
+        else:
+            self.entry_collection = entry_collection
 
-        for entry in content.entries:
-            ent = Entry(entry)
-            self.entries[ent.ID.lower()] = ent
-            self.title2id[ent.title.lower()] = ent.ID
-            if len(ent.ID) > self.maxlen_id:
-                self.maxlen_id = len(ent.ID)
-            if len(ent.title) > self.maxlen_title:
-                self.maxlen_title = len(ent.title)
-            self.id_list.append(ent.ID.lower())
+        self.visual = setup(conf)
 
-        self.visual = Visualizer()
         Entry.visual = self.visual
         self.has_stored_input = False
 
         # commands = namedtuple("commands", ["tag", "search", "list"])("t", "s", "l")
-        ctrl_keys = conf["controls"].keys()
-        self.commands = namedtuple("commands",  ctrl_keys) (*[conf["controls"][k] for k in ctrl_keys])
+        ctrl_keys = conf.controls.keys()
+        self.commands = namedtuple("commands",  ctrl_keys) (*[conf.controls[k] for k in ctrl_keys])
 
     def tag(self, arg=None):
         if arg is None:
             tag = self.visual.input("Tag:")
         self.visual.print("got tag: {}".format(tag))
         try:
-            for ent in self.entries.values:
+            for ent in self.entry_collection.entries.values:
                 if not ent.has_keywords() or not ent.has_keyword(tag):
                     continue
                 self.visual.print("[{}] {}".format(ent.ID, " ".join(ent.keywords)))
@@ -140,13 +165,13 @@ class Runner:
         self.visual.print("Got query: {}".format(query))
 
         # search ids
-        res = self.visual.search(query, [x.lower() for x in self.entries.keys()], self.max_search * 2)
+        res = self.visual.search(query, [x.lower() for x in self.entry_collection.entries.keys()], self.max_search * 2)
         res = [x + ("id",) for x in res]
         # search titles
-        title_res = self.visual.search(query.lower(), [x.title.lower() for x in self.entries.values()], self.max_search * 2)
+        title_res = self.visual.search(query.lower(), [x.title.lower() for x in self.entry_collection.entries.values()], self.max_search * 2)
         # filter to ids
         for t in title_res:
-            match_id = self.title2id[t[0]].lower()
+            match_id = self.entry_collection.title2id[t[0]].lower()
             if match_id in [x[0] for x in res]:
                 # just add match label
                 for r, x in enumerate(res):
@@ -159,9 +184,9 @@ class Runner:
 
         id_list = []
         for idx, (ID, score, match_by) in enumerate(res):
-            idstr = self.ID_str(ID)
-            titlestr = self.title_str(self.entries[ID].title)
-            num_str = self.num_str(idx+1, self.max_search)
+            idstr = self.visual.ID_str(ID, self.entry_collection, self.entry_collection)
+            titlestr = self.visual.title_str(self.entry_collection.entries[ID].title, self.entry_collection, self.entry_collection)
+            num_str = self.visual.num_str(idx+1, self.max_search)
             self.visual.print("{}: {}  title: {} match-by: {} | id score: {} ".format(num_str, idstr, titlestr, match_by, score))
             id_list.append(ID)
         self.visual.newline()
@@ -174,7 +199,7 @@ class Runner:
             self.visual.print("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(thelist)))
             return
         ID = thelist[ones_idx-1]
-        self.visual.print(json.dumps(self.entries[ID].get_pretty_dict(), indent=2))
+        self.visual.print(json.dumps(self.entry_collection.entries[ID].get_pretty_dict(), indent=2))
 
     def select_from_results(self, id_list):
         try:
@@ -193,22 +218,12 @@ class Runner:
         self.has_stored_input = False
         return self.stored_input
 
-    def title_str(self, title):
-        return "{:<{w}s}".format(title, w=self.maxlen_title)
-
-    def ID_str(self, ID):
-        return  "{:<{w}s}".format("\cite{" + ID + "}", w=self.maxlen_id+7)
-
-    def num_str(self, num, maxnum):
-        numpad = len(str(maxnum)) - len(str(num))
-        return "[{}]{}".format(num, " "*numpad)
-
     def list(self, arg=None):
-        for i, ID in enumerate(self.id_list):
+        for i, ID in enumerate(self.entry_collection.id_list):
             self.visual.print("{} {} {}".format(
-                self.num_str(i+1, len(self.entries)), self.ID_str(ID), self.title_str(self.entries[ID].title)))
+                self.visual.num_str(i+1, len(self.entry_collection.entries)), self.visual.ID_str(ID, self.entry_collection), self.visual.title_str(self.entry_collection.entries[ID].title, self.entry_collection)))
         self.visual.newline()
-        while self.select_from_results(self.id_list):
+        while self.select_from_results(self.entry_collection.id_list):
             pass
 
     def check_dual_input(self, command):
@@ -233,6 +248,10 @@ class Runner:
                 user_input = self.visual.input()
             else:
                 user_input = self.get_stored_input()
+            if not user_input:
+                self.visual.newline()
+                continue
+
             # check for dual input
             command, arg = self.check_dual_input(user_input)
 
@@ -242,6 +261,9 @@ class Runner:
                     self.visual.print("This is the first command.")
                     continue
                 command = previous_command
+
+            if command == self.commands.quit:
+                break
 
             if command == self.commands.tag:
                 self.tag(arg)
@@ -257,6 +279,6 @@ class Runner:
             else:
                 print("Undefined command:", command)
                 print("Available:", self.commands)
-                return
+                continue
             previous_command = command
 

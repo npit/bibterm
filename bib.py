@@ -1,4 +1,3 @@
-from reader import read
 from runner import Runner
 from adder import Adder
 from config import get_config, get_conf_filepath
@@ -28,11 +27,17 @@ def main():
             adder = Adder(conf)
             adder.add()
             return
+        if cmd == "merge":
+            if not args:
+                print("Need an argument for command {}".format(cmd))
+                return
+            adder = Adder(conf)
+            adder.merge(args[0])
+            return
 
-    content = read(conf.bib_path)
-    runner = Runner(content, conf_dict)
+    # if no action specified, explore
+    runner = Runner(conf_dict)
     runner.loop()
-
 
 if __name__ == '__main__':
     main()

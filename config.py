@@ -32,8 +32,10 @@ def set_defaults(conf):
     conf["controls"] = {"search":"/",
                         "list":"l",
                         "repeat":"r",
+                        "quit":"q",
                         "tag":"t"}
-    conf["actions"] = ["add"]
+    conf["actions"] = ["add", "merge"]
+    conf["visual"] = "default"
     return conf
 
 def get_config():
@@ -52,6 +54,8 @@ def get_config():
         if not exists(conf_dir):
             print("Creating configuration directory to {}".format(conf_dir))
             makedirs(dirname(conf_filepath))
+
+        conf = set_defaults(conf)
         print("Writing configuration to {}".format(conf_filepath))
         with open(conf_filepath, "w") as f:
             json.dump(conf, f)
@@ -60,7 +64,6 @@ def get_config():
         with open(conf_filepath, "r") as f:
             conf = json.load(f)
     conf["created_new"] = initialized
-    conf = set_defaults(conf)
     # restore copied data
     clipboard.copy(copied_data)
     return conf
