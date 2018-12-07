@@ -1,129 +1,11 @@
-import json
-import re
-from collections import namedtuple, OrderedDict
-from reader import Reader
+from collections import namedtuple
+from reader import Reader, EntryCollection, Entry
 from visual import setup
+from writer import BibWriter
 # do not use curses, try
 #     http: // urwid.org / tutorial /
 #     or
 #     https: // pypi.org / project / blessings /
-
-def loop(runner):
-    runner.loop()
-
-class EntryCollection:
-    def __init__(self, bib_db):
-        self.bibtex_db = bib_db
-        self.title2id = {}
-        self.entries = {}
-        self.maxlen_id = 0
-        self.maxlen_title = 0
-        self.id_list = []
-        self.title_list = []
-        for entry in bib_db.entries:
-            ent = Entry(entry)
-            self.insert(ent)
-
-    def only_keep(self, keep_ids):
-        for ID in self.id_list:
-            if ID in keep_ids:
-                continue
-            title = self.entries[ID].title.lower()
-            self.id_list.remove(ID)
-            del self.entries[ID]
-            self.title_list.remove(title)
-            del self.title2id[title]
-
-    def insert_new(self, ent):
-        self.insert(ent)
-        # update underlying bibtex database
-        self.bibtex_db.entries.append(ent.raw_dict)
-        self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
-
-    def insert(self, ent):
-        ID = ent.ID.lower()
-        title = ent.title.lower()
-        # update object lookup dict
-        self.entries[ID] = ent
-        # update title-id mapping
-        self.title2id[title] = ent.ID.lower()
-        # update ids and titles lists
-        self.id_list.append(ID)
-        self.title_list.append(title)
-        # update maximum ID / title lengths
-        if len(ent.ID) > self.maxlen_id:
-            self.maxlen_id = len(ent.ID)
-        if len(ent.title) > self.maxlen_title:
-            self.maxlen_title = len(ent.title)
-
-    def get_writable_db(self):
-        stringify_keys = ["author", "keywords", "journal", "link"]
-        for key in stringify_keys:
-            for i in range(len(self.bibtex_db.entries)):
-                print(self.bibtex_db.entries[i]["ID"])
-                if key not in self.bibtex_db.entries[i]:
-                    continue
-                print(key, self.bibtex_db.entries[i][key])
-                if type(self.bibtex_db.entries[i][key]) != str:
-                    self.bibtex_db.entries[i][key] = self.stringify(self.bibtex_db.entries[i][key])
-            for ID in self.bibtex_db.entries_dict:
-                print(ID)
-                if key not in self.bibtex_db.entries_dict[ID]:
-                    continue
-                print(key, self.bibtex_db.entries_dict[ID][key])
-                if type(self.bibtex_db.entries_dict[ID][key]) != str:
-                    self.bibtex_db.entries_dict[ID][key] = self.stringify(self.bibtex_db.entries_dict[ID][key])
-        return self.bibtex_db
-
-    def stringify(self, value):
-        value = ", ".join(value)
-        return re.sub("[{}]", "", value)
-
-
-
-
-
-
-class Entry:
-    ENTRYTYPE = None
-    ID = None
-    archiveprefix = None
-    arxivid = None
-    author = None
-    booktitle = None
-    doi = None
-    eprint = None
-    file = None
-    isbn = None
-    issn = None
-    keywords = None
-    link = None
-    number = None
-    pages = None
-    pmid = None
-    publisher = None
-    title = None
-    url = None
-    volume = None
-    year = None
-
-    def __init__(self, kv):
-        for key in kv:
-            self.__setattr__(key, kv[key])
-        self.raw_dict = kv
-    def has_keywords(self):
-        return self.keywords is not None
-    def has_keyword(self, kw):
-        if not self.has_keywords():
-            return False
-        return kw in self.keywords
-    def get_pretty_dict(self):
-        d=OrderedDict()
-        for key in ["ENTRYTYPE", "ID", "author", "title", "year"]:
-            if key in self.raw_dict:
-                d[key] = self.raw_dict[key]
-        return d
-
 
 
 class Runner:
@@ -131,22 +13,22 @@ class Runner:
     max_search = 10
 
     def __init__(self, conf, entry_collection=None):
+        # setup visual
+        self.conf = conf
+        self.visual = setup(conf)
+
         # read the bib database
         if entry_collection is None:
             rdr = Reader(conf)
             rdr.read()
-            self.entry_collection = EntryCollection(rdr.get_content())
+            self.entry_collection = rdr.get_entry_collection()
         else:
             self.entry_collection = entry_collection
 
-        self.visual = setup(conf)
-
-        Entry.visual = self.visual
         self.has_stored_input = False
 
-        # commands = namedtuple("commands", ["tag", "search", "list"])("t", "s", "l")
         ctrl_keys = conf.controls.keys()
-        self.commands = namedtuple("commands",  ctrl_keys) (*[conf.controls[k] for k in ctrl_keys])
+        self.commands = namedtuple("commands", ctrl_keys)(*[conf.controls[k] for k in ctrl_keys])
 
     def tag(self, arg=None):
         if arg is None:
@@ -182,15 +64,10 @@ class Runner:
                 continue
             res.append((match_id, t[1], "title"))
             # sort by score, prune to max
-            res = sorted(res, key=lambda obj : obj[1], reverse=True)[:self.max_search]
+            res = sorted(res, key=lambda obj: obj[1], reverse=True)[:self.max_search]
 
-        id_list = []
-        for idx, (ID, score, match_by) in enumerate(res):
-            idstr = self.visual.ID_str(ID, self.entry_collection, self.entry_collection)
-            titlestr = self.visual.title_str(self.entry_collection.entries[ID].title, self.entry_collection, self.entry_collection)
-            num_str = self.visual.num_str(idx+1, self.max_search)
-            self.visual.print("{}: {}  title: {} match-by: {} | id score: {} ".format(num_str, idstr, titlestr, match_by, score))
-            id_list.append(ID)
+        id_list = [r[0] for r in res]
+        self.visual.print_entry_enum([self.entry_collection.entries[ID] for ID in id_list], self.entry_collection)
         self.visual.newline()
         while self.select_from_results(id_list):
             pass
@@ -200,8 +77,8 @@ class Runner:
         if not isinstance(ones_idx, int) or ones_idx > len(thelist) or ones_idx < 1:
             self.visual.print("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(thelist)))
             return
-        ID = thelist[ones_idx-1]
-        self.visual.print(json.dumps(self.entry_collection.entries[ID].get_pretty_dict(), indent=2))
+        ID = thelist[ones_idx - 1]
+        self.visual.print_entry_contents(self.entry_collection.entries[ID])
 
     def select_from_results(self, id_list):
         try:
@@ -221,9 +98,7 @@ class Runner:
         return self.stored_input
 
     def list(self, arg=None):
-        for i, ID in enumerate(self.entry_collection.id_list):
-            self.visual.print("{} {} {}".format(
-                self.visual.num_str(i+1, len(self.entry_collection.entries)), self.visual.ID_str(ID, self.entry_collection), self.visual.title_str(self.entry_collection.entries[ID].title, self.entry_collection)))
+        self.visual.print_entry_enum(self.entry_collection.entries.values(), self.entry_collection)
         self.visual.newline()
         while self.select_from_results(self.entry_collection.id_list):
             pass
@@ -236,7 +111,6 @@ class Runner:
             return parts[0], parts[1:]
         except ValueError:
             return command, None
-
 
     def matches(self, cmd, candidate):
         return cmd == candidate or cmd.startswith(candidate)
@@ -283,4 +157,3 @@ class Runner:
                 print("Available:", self.commands)
                 continue
             previous_command = command
-
