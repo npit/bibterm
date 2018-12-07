@@ -1,4 +1,5 @@
 import json
+import re
 from collections import namedtuple, OrderedDict
 from reader import Reader
 from visual import setup
@@ -64,24 +65,25 @@ class EntryCollection:
                     continue
                 print(key, self.bibtex_db.entries[i][key])
                 if type(self.bibtex_db.entries[i][key]) != str:
-                    self.bibtex_db.entries[i][key] = ", ".join(self.bibtex_db.entries[i][key])
+                    self.bibtex_db.entries[i][key] = self.stringify(self.bibtex_db.entries[i][key])
             for ID in self.bibtex_db.entries_dict:
                 print(ID)
                 if key not in self.bibtex_db.entries_dict[ID]:
                     continue
                 print(key, self.bibtex_db.entries_dict[ID][key])
                 if type(self.bibtex_db.entries_dict[ID][key]) != str:
-                    self.bibtex_db.entries_dict[ID][key] = ", ".join(self.bibtex_db.entries_dict[ID][key])
+                    self.bibtex_db.entries_dict[ID][key] = self.stringify(self.bibtex_db.entries_dict[ID][key])
         return self.bibtex_db
-    
+
+    def stringify(self, value):
+        value = ", ".join(value)
+        return re.sub("[{}]", "", value)
 
 
 
 
 
 
-    
-            
 class Entry:
     ENTRYTYPE = None
     ID = None
@@ -133,7 +135,7 @@ class Runner:
         if entry_collection is None:
             rdr = Reader(conf)
             rdr.read()
-            self.entry_collection = EntryCollection(rdr.get_content().entries)
+            self.entry_collection = EntryCollection(rdr.get_content())
         else:
             self.entry_collection = entry_collection
 

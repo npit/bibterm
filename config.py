@@ -34,7 +34,7 @@ def set_defaults(conf):
                         "repeat":"r",
                         "quit":"q",
                         "tag":"t"}
-    conf["actions"] = ["add", "merge"]
+    conf["actions"] = ["add", "merge", "inspect"]
     conf["visual"] = "default"
     return conf
 

@@ -45,7 +45,6 @@ class Reader:
 
     # preprocess a bib file to be readable
     def preprocess(self, bib_path):
-        preprocessed_path = join(self.temp_dir, basename(bib_path))
         # preprocess
         applied_changes = False
         with open(bib_path) as f:
@@ -59,16 +58,21 @@ class Reader:
                     continue
                 newlines.append(line)
         if applied_changes:
+            preprocessed_path = join(self.temp_dir, basename(bib_path))
             # write the modified file
             with open(preprocessed_path, "w") as f:
                 f.writelines(newlines)
             print("Modified {} to {}:".format(self.bib_path, preprocessed_path))
-        return preprocessed_path
+            return preprocessed_path
+        return bib_path
 
 
     # Read bibtex file, preprocessing out comments
     def read(self):
         filename = self.preprocess(self.bib_path)
+        if not exists(filename):
+            print("File {} does not exist.".format(filename))
+            exit(1)
         # read it
         with open(filename) as f:
             parser = BibTexParser()
