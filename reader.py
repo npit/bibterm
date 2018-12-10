@@ -120,7 +120,7 @@ class EntryCollection:
                 authorname = authorname.split("-")[0]
             authorname = re.sub('[^a-zA-Z]+', '', authorname)
             # remove stopwords, get first word
-            title_first = [x for x in title.lower().split() if x not in stopwords]
+            title_first = [x for x in title.strip().lower().split() if x not in stopwords]
             title_first = title_first[0]
             if "-" in title:
                 # for dashes, keep the first part
@@ -349,7 +349,7 @@ class Reader:
             self.visual.print("Applied a total of {} fixes to {} entries.".format(self.entry_collection.fixes, self.entry_collection.entries_fixed))
             what = None
             while what not in ["y", "n"]:
-                what = self.visual.input("Write fixes to source file? [y]es *[n]o: ")
+                what = self.visual.input("Write fixes to source file: {}? [y]es *[n]o: ".format(self.bib_path))
             if not what or what.lower() == "n":
                 pass
             else:

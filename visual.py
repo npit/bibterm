@@ -22,7 +22,7 @@ class Io:
     def list(self, content):
         pass
 
-    def print(self, msg):
+    def print(self, msg=""):
         print(msg)
 
     def input(self, msg=""):
@@ -32,21 +32,22 @@ class Io:
         return process.extract(query, candidates, limit=atmost)
 
     def newline(self):
-        print()
+        self.print()
 
-    def title_str(self, title, entry_collection):
-        return "{:<{w}s}".format(title, w=entry_collection.maxlen_title)
+    def title_str(self, title, maxlen_title):
+        return "{:<{w}s}".format(title, w=maxlen_title)
 
-    def ID_str(self, ID, entry_collection):
-        return "{:<{w}s}".format("\\cite{" + ID + "}", w=entry_collection.maxlen_id + 7)
+    def ID_str(self, ID, maxlen_id):
+        return "{:<{w}s}".format("\\cite{" + ID + "}", w=maxlen_id + 7)
 
     def num_str(self, num, maxnum):
         numpad = len(str(maxnum)) - len(str(num))
         return "[{}]{}".format(num, " " * numpad)
 
-    def gen_entry_enum_strings(self, entry, entry_collection, num, max_num=100):
-            return (self.num_str(num, max_num), self.ID_str(entry.ID, entry_collection),
-                    self.title_str(entry.title, entry_collection))
+    def gen_entry_enum_strings(self, entry, entry_collection, num):
+        max_num = len(entry_collection.entries)
+        return (self.num_str(num, max_num), self.ID_str(entry.ID, entry_collection.maxlen_id),
+                self.title_str(entry.title, entry_collection.maxlen_title))
 
     # produce enumeration strings
     def gen_entries_enum_strings(self, entries, entry_collection):
@@ -71,7 +72,6 @@ class Io:
                 if print_dots:
                     self.print("...")
                     print_dots = False
-        self.newline()
 
     def print_entry_contents(self, entry):
         self.print(json.dumps(entry.get_pretty_dict(), indent=2))
