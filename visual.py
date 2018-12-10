@@ -44,8 +44,9 @@ class Io:
         numpad = len(str(maxnum)) - len(str(num))
         return "[{}]{}".format(num, " " * numpad)
 
-    def gen_entry_enum_strings(self, entry, entry_collection, num):
-        max_num = len(entry_collection.entries)
+    def gen_entry_enum_strings(self, entry, entry_collection, num, max_num=None):
+        if max_num is None:
+            max_num = len(entry_collection.entries)
         return (self.num_str(num, max_num), self.ID_str(entry.ID, entry_collection.maxlen_id),
                 self.title_str(entry.title, entry_collection.maxlen_title))
 
@@ -53,11 +54,11 @@ class Io:
     def gen_entries_enum_strings(self, entries, entry_collection):
         enum_str_list = []
         for i, entry in enumerate(entries):
-            enum_str_list.append(self.gen_entry_enum_strings(entry, entry_collection, i + 1, len(entries)))
+            enum_str_list.append(self.gen_entry_enum_strings(entry, entry_collection, i + 1))
         return enum_str_list
 
     # print a list of entries
-    def print_entry_enum(self, x_iter, entry_collection, at_most=None):
+    def print_entries_enum(self, x_iter, entry_collection, at_most=None):
         if at_most and len(x_iter) > at_most:
             idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]
         else:

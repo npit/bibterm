@@ -66,7 +66,7 @@ class Runner:
             res = sorted(res, key=lambda obj: obj[1], reverse=True)[:self.max_search]
 
         id_list = [r[0] for r in res]
-        self.visual.gen_entries_enum_strings([self.entry_collection.entries[ID] for ID in id_list], self.entry_collection)
+        self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in id_list], self.entry_collection)
         # self.visual.newline()
         while self.select_from_results(id_list):
             pass
@@ -97,7 +97,7 @@ class Runner:
         return self.stored_input
 
     def list(self, arg=None):
-        self.visual.print_entry_enum(self.entry_collection.entries.values(), self.entry_collection)
+        self.visual.print_entries_enum(self.entry_collection.entries.values(), self.entry_collection)
         # self.visual.newline()
         while self.select_from_results(self.entry_collection.id_list):
             pass
@@ -114,11 +114,14 @@ class Runner:
     def matches(self, cmd, candidate):
         return cmd == candidate or cmd.startswith(candidate)
 
-    def loop(self):
+    def loop(self, input_cmd=None):
         previous_command = None
         while(True):
             # begin loop
-            if not self.has_stored_input:
+            if input_cmd is not None:
+                user_input = input_cmd
+                input_cmd = None
+            elif not self.has_stored_input:
                 self.visual.idle()
                 user_input = self.visual.input()
             else:

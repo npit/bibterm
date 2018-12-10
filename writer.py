@@ -61,7 +61,7 @@ class BibWriter:
         ids_to_replace = []
         id_matches = []
 
-        self.visual.print_entry_enum(other_collection.entries.values(), other_collection, at_most=20)
+        self.visual.print_entries_enum(other_collection.entries.values(), other_collection, at_most=20)
 
         for ID in other_collection.entries:
             ids_to_insert.append(ID)

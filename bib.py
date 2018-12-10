@@ -69,13 +69,18 @@ def main():
             runner.loop()
             return
         else:
-            print("Undefined command: {}".format(cmd))
-            return
+            runner = Runner(conf)
+            if any([runner.matches(cmd, x) for x in runner.commands]):
+                runner.loop(input_cmd=cmd)
+            else:
+                print("Undefined command: {}".format(cmd))
 
+            return
 
     # if no action specified, explore
     runner = Runner(conf)
     runner.loop()
+
 
 if __name__ == '__main__':
     main()
