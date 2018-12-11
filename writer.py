@@ -1,4 +1,5 @@
 import clipboard
+import utils
 from os.path import exists
 from visual import setup
 import bibtexparser
@@ -55,7 +56,6 @@ class BibWriter:
 
     # merge bib file to database
     def merge(self, entry_collection, other_collection):
-         
         self.visual.print("Merging {}-sized collection:".format(len(other_collection.entries)))
         ids_to_insert = []
         ids_to_replace = []
@@ -69,33 +69,33 @@ class BibWriter:
                 id_matches.append(ID)
 
         if id_matches:
-            self.visual.print("There are {} duplicate ids:".format(len(id_matches)))
-            for ID in id_matches:
-                entry = entry_collection.entries[ID]
-                self.visual.print("{} {}".format(self.visual.ID_str(entry.ID, entry_collection), self.visual.title_str(entry.title, entry_collection)))
+            self.visual.print("{} duplicate ids (already exist in {})".format(len(id_matches), self.bib_path))
+            self.visual.print_entries_enum([entry_collection.entries[ID] for ID in id_matches], entry_collection, at_most=20)
+            # for ID in id_matches:
+            #     entry = entry_collection.entries[ID]
+            #     self.visual.print("{} {}".format(self.visual.ID_str(entry.ID, entry_collection.maxlen_id), self.visual.title_str(entry.title, entry_collection.maxlen_title)))
 
-            what = self.visual.input("[R]eplace, [o]mit, [a]bort? ").lower()
-
-            if what == "a":
+            what = self.visual.input("Duplicates exist, what do?", "replace omit *abort")
+            if utils.matches(what, "abort"):
                 self.visual.print("Aborting.")
                 exit(1)
-            if what == "o":
+            if utils.matches(what, "omit"):
                 # omit them
                 ids_to_insert = [i for i in ids_to_insert if i not in id_matches]
-            if what == "r":
+            if utils.matches(what, "replace"):
                 ids_to_replace = id_matches
                 ids_to_insert = [i for i in ids_to_insert if i not in ids_to_replace]
 
         if not ids_to_insert and not ids_to_replace:
             self.visual.print("Nothing left to merge.")
-            return
+            return None
         # insert them
         self.visual.print("Proceeding to insert {} entries:".format(len(ids_to_insert)))
         for i, ID in enumerate(ids_to_insert):
             entry = other_collection.entries[ID]
             strs = self.visual.gen_entry_enum_strings(entry, other_collection, i + 1, len(ids_to_insert))
             self.visual.print("Inserting {} {} {}".format(*strs))
-            entry_collection.insert(entry)
+            entry_collection.create(entry)
 
         self.visual.print("Proceeding to replace {} entries:".format(len(ids_to_replace)))
         for i, ID in enumerate(ids_to_replace):
@@ -104,17 +104,10 @@ class BibWriter:
             self.visual.print("Inserting {} {} {}".format(*strs))
             entry_collection.replace(entry)
         
-
-        # what = self.visual.input("Inspect udpated collection? *[y]es / [n]o: ")
-        # if not what or what == "y":
-        #     runner = Runner(self.conf, entry_collection=self.entry_collection)
-        #     runner.loop()
-        # else:
-        #     self.visual.print_entry_enum(self.entry_collection.entries.values(), self.entry_collection)
-        # write results
         return entry_collection
 
     def write(self, entry_collection):
-        self.visual.print("Overwriting changes to {}".format(self.bib_path))
+        self.visual.print("Writing {} items to {}".format(len(entry_collection.bibtex_db.entries), self.bib_path))
         with open(self.bib_path, "w") as f:
+            breakpoint()
             bibtexparser.dump(entry_collection.get_writable_db(), f)

@@ -1,6 +1,7 @@
 from collections import namedtuple
 from reader import Reader
 from visual import setup
+import utils
 # do not use curses, try
 #     http: // urwid.org / tutorial /
 #     or
@@ -111,9 +112,6 @@ class Runner:
         except ValueError:
             return command, None
 
-    def matches(self, cmd, candidate):
-        return cmd == candidate or cmd.startswith(candidate)
-
     def loop(self, input_cmd=None):
         previous_command = None
         while(True):
@@ -146,7 +144,7 @@ class Runner:
             if command == self.commands.tag:
                 self.tag(arg)
 
-            elif self.matches(command, self.commands.search):
+            elif command.startswith(self.commands.search):
                 # concat to a single query
                 arg = " ".join(arg)
                 if command != self.commands.search:

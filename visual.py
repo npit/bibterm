@@ -1,4 +1,5 @@
 import json
+import utils
 from fuzzywuzzy import process
 
 
@@ -16,6 +17,7 @@ def setup(conf):
 
 
 class Io:
+    default_option_mark = "*"
     def idle(self):
         print("Give command: ", end="")
 
@@ -25,8 +27,41 @@ class Io:
     def print(self, msg=""):
         print(msg)
 
-    def input(self, msg=""):
-        return input(msg)
+    def error(self, msg):
+        self.print(msg)
+        exit(1)
+
+    def input(self, msg="", options_str=None):
+        default_idx = None
+        if options_str is not None:
+            opts = options_str.split()
+            default_idx = [i for i in range(len(opts)) if opts[i].startswith(self.default_option_mark)]
+            if default_idx:
+                if len(default_idx) > 1:
+                    self.error("Multiple defaults:" + options_str)
+                default_idx = default_idx[0]
+                # remove asterisk from raw inputs
+                opts[default_idx] = opts[default_idx][1:]
+
+            opt_print = ["[{}]{}".format(x[0], x[1:]) for x in opts]
+            if default_idx is not None:
+                # add asterisk on print
+                opt_print[default_idx] = self.default_option_mark + opt_print[default_idx]
+            opt_print = " ".join(opt_print)
+            msg += " " + opt_print + ": "
+
+        while True:
+            ans = input(msg)
+            if options_str:
+                # default option on empty input
+                if not ans and default_idx is not None:
+                    return opts[default_idx]
+                # loop on invalid input
+                if not utils.matches(ans, opts):
+                    self.print("Valid options are: " + opt_print)
+                    continue
+            # valid or no-option input
+            return ans
 
     def search(self, query, candidates, atmost):
         return process.extract(query, candidates, limit=atmost)

@@ -1,4 +1,5 @@
 from runner import Runner
+import utils
 from reader import Reader
 from writer import BibWriter
 from config import get_config, get_conf_filepath
@@ -47,13 +48,15 @@ def main():
 
             writer = BibWriter(conf)
             merged_collection = writer.merge(reader.get_entry_collection(), reader2.get_entry_collection())
+            if merged_collection is None:
+                return
             vis.print("Inspecting merged collection.")
             runner = Runner(conf, entry_collection=merged_collection)
             runner.loop()
-            what = vis.input("Proceed to write? [y]es [n]o: ")
-            if what.lower() == "y":
+            what = vis.input("Proceed to write?", "*yes no")
+            if utils.matches(what, "yes"):
                 writer.write(merged_collection)
-                vis.print("Wrote.")
+                vis.print("Wrote!")
             else:
                 vis.print("Aborting.")
             return

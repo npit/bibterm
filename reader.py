@@ -1,4 +1,5 @@
 import os
+import utils
 from collections import OrderedDict
 from stopwords import stopwords
 from os.path import exists, basename, join
@@ -31,7 +32,7 @@ class EntryCollection:
         all_ids = [x["ID"] for x in bib_db.entries]
         duplicates = [item for item, count in collections.Counter(all_ids).items() if count > 1]
         if duplicates:
-            self.visual.print("{} duplicates found: {}".format(len(duplicates), duplicates))
+            self.visual.print("{} duplicates found:\n{}\n".format(len(duplicates), "\n".join(duplicates)))
             self.visual.print("Fix them first, bye!")
             exit(1)
 
@@ -122,9 +123,10 @@ class EntryCollection:
             # remove stopwords, get first word
             title_first = [x for x in title.strip().lower().split() if x not in stopwords]
             title_first = title_first[0]
-            if "-" in title:
-                # for dashes, keep the first part
-                title_first = title_first.split("-")[0]
+            for x in ["-", "/"]:
+                if x in title:
+                    # for dashes or slashes, keep the first part
+                    title_first = title_first.split(x)[0]
             title_first = re.sub('[^a-zA-Z]+', '', title_first)
             expected_id = "{}{}{}".format(authorname, year, title_first)
             if ID != expected_id:
@@ -144,7 +146,7 @@ class EntryCollection:
                 if title[-1] == ".":
                     title = title[:-1]
                 self.fixes += 1
-                self.visual.print("Correcting {}/{} (#{} fixed, {} fixes) title {} -> {}.".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, ent.title, title))
+                self.visual.print("Correcting {}/{} (#{} fixed, {} fixes) [title] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, ent.title, title))
                 # set it to the bibtex dict
                 self.bibtex_db.entries_dict[ID]["title"] = title
                 # set it to the bibtex list
@@ -163,15 +165,22 @@ class EntryCollection:
     def need_fix(self, entry_id, problem):
         fix = False
         if self.do_fix is None:
-            what = self.visual.input("Fix entry problem: [{} : {}]? [y]es [n]o [Y]es-all, [N]o-all: ".format(entry_id, problem))
-            if what == "Y":
+            what = self.visual.input("Fix entry problem: [{} : {}]?".format(entry_id, problem), "yes no *Yes-all No-all")
+            if utils.matches(what, "Yes-all"):
                 self.do_fix = True
-            if what == "N":
+            if utils.matches(what, "No-all"):
                 self.do_fix = False
-            fix = self.do_fix if self.do_fix is not None else what == "y"
+            fix = self.do_fix if self.do_fix is not None else utils.matches(what, "yes")
         else:
             return self.do_fix
         return fix
+
+    def create(self, ent):
+        self.insert(ent, can_fix=False)
+        self.bibtex_db.entries.append(ent.raw_dict)
+        if ent.ID in self.bibtex_db.entries_dict:
+            self.visual.error("Existing entity on creation:\n{}".format(ent.raw_dict))
+        self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
 
     def insert(self, ent, can_fix=True):
         if can_fix:
@@ -347,10 +356,8 @@ class Reader:
 
         if self.entry_collection.entries_fixed > 0:
             self.visual.print("Applied a total of {} fixes to {} entries.".format(self.entry_collection.fixes, self.entry_collection.entries_fixed))
-            what = None
-            while what not in ["y", "n"]:
-                what = self.visual.input("Write fixes to source file: {}? [y]es *[n]o: ".format(self.bib_path))
-            if not what or what.lower() == "n":
+            what = self.visual.input("Write fixes to the original source file: {}?".format(self.bib_path), "yes *no")
+            if utils.matches(what, "no"):
                 pass
             else:
                 writer = BibWriter(self.conf, entry_collection=self.entry_collection)
