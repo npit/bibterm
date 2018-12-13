@@ -353,22 +353,23 @@ class Reader:
         parser = BibTexParser()
         parser.customization = Reader.customizations
         db = bibtexparser.loads(string, parser=parser)
-        self.visual.print("Loaded {} entries from string.".format(len(db.entries)))
+        self.visual.print("Loaded {} entries from supplied string.".format(len(db.entries)))
         self.entry_collection = EntryCollection(db)
 
     # Read bibtex file, preprocessing out comments
-    def read(self):
-        filename = self.preprocess(self.bib_path)
-        self.visual.print("Reading from file {}.".format(filename))
-        if not exists(filename):
-            self.visual.print("File {} does not exist.".format(filename))
+    def read(self, input_file=None):
+        if input_file is None:
+            input_file = self.preprocess(self.bib_path)
+        self.visual.print("Reading from file {}.".format(input_file))
+        if not exists(input_file):
+            self.visual.print("File {} does not exist.".format(input_file))
             exit(1)
         # read it
-        with open(filename) as f:
+        with open(input_file) as f:
             parser = BibTexParser()
             parser.customization = Reader.customizations
             db = bibtexparser.load(f, parser=parser)
-            self.visual.print("Loaded {} entries from {}.".format(len(db.entries), self.bib_path))
+            self.visual.print("Loaded {} entries from file {}.".format(len(db.entries), self.bib_path))
         self.db = db
         self.entry_collection = EntryCollection(db)
 

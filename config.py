@@ -7,9 +7,11 @@ import clipboard
 Read configuration of the underlying bibtex database
 """
 
+
 # configuration file path
 def get_conf_filepath():
-    return join(expanduser("~"), ".config","bib", "config.json")
+    return join(expanduser("~"), ".config", "bib", "config.json")
+
 
 # build configuration
 def create_config():
@@ -27,17 +29,19 @@ def create_config():
     conf["bib_path"] = bib_filepath
     return conf
 
+
 def set_defaults(conf):
     # controls
-    conf["controls"] = {"search":"/",
-                        "list":"l",
-                        "repeat":"r",
-                        "quit":"q",
-                        "tag":"t"}
+    conf["controls"] = {"search": "/",
+                        "list": "l",
+                        "repeat": "r",
+                        "quit": "q",
+                        "tag": "t"}
 
-    conf["actions"] = ["merge", "inspect"]
+    conf["actions"] = ["get", "merge", "inspect"]
     conf["visual"] = "default"
     return conf
+
 
 def get_config():
     # backup copied data, in case we are adding an entry
