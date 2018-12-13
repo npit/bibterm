@@ -79,27 +79,36 @@ class Io:
         numpad = len(str(maxnum)) - len(str(num))
         return "[{}]{}".format(num, " " * numpad)
 
-    def gen_entry_enum_strings(self, entry, entry_collection, num, max_num=None):
+    def gen_entry_enum_strings(self, entry, maxlens, num, max_num=None):
         if max_num is None:
-            max_num = len(entry_collection.entries)
-        return (self.num_str(num, max_num), self.ID_str(entry.ID, entry_collection.maxlen_id),
-                self.title_str(entry.title, entry_collection.maxlen_title))
+            max_num = maxlens[0]
+        return (self.num_str(num, max_num), self.ID_str(entry.ID, maxlens[1]),
+                self.title_str(entry.title, maxlens[2]))
 
     # produce enumeration strings
-    def gen_entries_enum_strings(self, entries, entry_collection):
+    def gen_entries_enum_strings(self, entries, maxlens):
         enum_str_list = []
         for i, entry in enumerate(entries):
-            enum_str_list.append(self.gen_entry_enum_strings(entry, entry_collection, i + 1))
+            enum_str_list.append(self.gen_entry_enum_strings(entry, maxlens, i + 1))
         return enum_str_list
 
     # print a list of entries
     def print_entries_enum(self, x_iter, entry_collection, at_most=None):
+        
         if at_most and len(x_iter) > at_most:
             idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]
         else:
             idxs_print = list(range(len(x_iter)))
 
-        strings = self.gen_entries_enum_strings(x_iter, entry_collection)
+        if len(x_iter) != len(entry_collection.entries):
+            # recompute max lengths
+            maxlen_id = max([len(x.ID) for x in x_iter])
+            maxlen_title = max([len(x.title) for x in x_iter])
+            maxlens = len(x_iter), maxlen_id, maxlen_title
+        else:
+            maxlens = entry_collection.maxlens()
+
+        strings = self.gen_entries_enum_strings(x_iter, maxlens)
         print_dots = True
         for i, tup in enumerate(strings):
             if i in idxs_print:

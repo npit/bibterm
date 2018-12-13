@@ -48,6 +48,11 @@ class EntryCollection:
             ent = Entry(entry)
             self.insert(ent)
 
+    def maxlens(self, id_list=None):
+        if id_list is None:
+            return len(self.entries), self.maxlen_id, self.maxlen_title
+        return len(id_list), max(list(map(len, id_list))), max([len(self.entries[ID].title) for ID in id_list])
+
     def only_keep(self, keep_ids):
         for ID in self.id_list:
             if ID in keep_ids:
@@ -178,9 +183,12 @@ class EntryCollection:
     def create(self, ent):
         self.insert(ent, can_fix=False)
         self.bibtex_db.entries.append(ent.raw_dict)
-        if ent.ID in self.bibtex_db.entries_dict:
-            self.visual.error("Existing entity on creation:\n{}".format(ent.raw_dict))
-        self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
+        # the following updates the entries dict
+        self.bibtex_db.get_entry_dict()
+        # make sure it's there
+        if ent.ID not in self.bibtex_db.entries_dict:
+            self.visual.warn("Non existing ID on bibtex dict: {}, adding.".format(ent.ID))
+            self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
 
     def insert(self, ent, can_fix=True):
         if can_fix:
@@ -191,7 +199,6 @@ class EntryCollection:
         if ID in self.entries:
             self.visual.print("Entry with id {} already in entries dict!".format(ID))
             exit(1)
-        
         self.entries[ID] = ent
         # update title-id mapping
         self.title2id[title] = ID
@@ -266,6 +273,9 @@ class Entry:
             return False
         return kw in self.keywords
 
+    def get_citation(self):
+        return "\\cite{" + self.ID + "}"
+
     def get_pretty_dict(self):
         d = OrderedDict()
         for key in ["ENTRYTYPE", "ID", "author", "title", "year"]:
@@ -337,6 +347,14 @@ class Reader:
             self.visual.print("Modified {} to {}:".format(self.bib_path, preprocessed_path))
             return preprocessed_path
         return bib_path
+
+    # Read from string
+    def read_string(self, string):
+        parser = BibTexParser()
+        parser.customization = Reader.customizations
+        db = bibtexparser.loads(string, parser=parser)
+        self.visual.print("Loaded {} entries from string.".format(len(db.entries)))
+        self.entry_collection = EntryCollection(db)
 
     # Read bibtex file, preprocessing out comments
     def read(self):

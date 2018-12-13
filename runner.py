@@ -1,7 +1,6 @@
 from collections import namedtuple
 from reader import Reader
 from visual import setup
-import utils
 # do not use curses, try
 #     http: // urwid.org / tutorial /
 #     or
