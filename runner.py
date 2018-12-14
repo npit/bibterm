@@ -18,6 +18,7 @@ class Runner:
         self.conf = conf
         self.visual = setup(conf)
         self.editor = None
+        self.cached_selection = None
 
         # read the bib database
         if entry_collection is None:
@@ -108,17 +109,23 @@ class Runner:
     def select_from_results(self, id_list):
         inp = self.visual.input("Inspect/edit: [{}|] [num] or give new command: ".format("|".join(self.edit_commands))).lower()
         # match command & index
+        breakpoint()
         if not inp[0].isdigit():
             # command offered.
             cmd, *arg = inp.split(maxsplit=1)
             if utils.matches(cmd, "tag"):
                 # arg has to be a single string
-                num = self.string_to_entry_id(arg[0])
-                if num is None:
-                    return True
-                updated_entry = self.get_editor().tag(self.entry_collection.entries[id_list[num-1]])
-                if self.editor.collection_modified:
-                    self.entry_collection.replace(updated_entry)
+                if not arg and self.cached_selection is not None:
+                    nums = self.cached_selection
+                else:
+                    nums = [self.string_to_entry_id(x) for x in arg]
+                    if any([x is None for x in nums]) or not nums:
+                        self.visual.print("Need a valid entry index.")
+                        return True
+                for num in nums:
+                    updated_entry = self.get_editor().tag(self.entry_collection.entries[id_list[num-1]])
+                    if self.editor.collection_modified:
+                        self.entry_collection.replace(updated_entry)
                 return True
             else:
                 # not an edit command, pass it on to the main loop
@@ -133,6 +140,7 @@ class Runner:
             if num is None:
                 return True
             self.inspect_entry(id_list, num)
+            self.cached_selection = num
             return True
 
     def get_stored_input(self):
