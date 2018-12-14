@@ -48,6 +48,11 @@ class EntryCollection:
             ent = Entry(entry)
             self.insert(ent)
 
+
+    # check if num in [1, num_entries]
+    def num_in_range(self, num):
+        return (num >= 1 and num <= len(self.entries))
+
     def maxlens(self, id_list=None):
         if id_list is None:
             return len(self.entries), self.maxlen_id, self.maxlen_title
@@ -83,7 +88,7 @@ class EntryCollection:
         # remove existing
         self.remove(ent.ID)
         # insert it
-        self.insert(ent, can_fix=False)
+        self.create(ent)
 
     def correct_id(self, current_id, expected_id):
         # id
@@ -187,7 +192,7 @@ class EntryCollection:
         self.bibtex_db.get_entry_dict()
         # make sure it's there
         if ent.ID not in self.bibtex_db.entries_dict:
-            self.visual.warn("Non existing ID on bibtex dict: {}, adding.".format(ent.ID))
+            # self.visual.warn("Non existing ID on bibtex dict: {}, adding.".format(ent.ID))
             self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
 
     def insert(self, ent, can_fix=True):
@@ -276,9 +281,12 @@ class Entry:
     def get_citation(self):
         return "\\cite{" + self.ID + "}"
 
+    def set_keywords(self, kw):
+        self.raw_dict["keywords"] = kw
+
     def get_pretty_dict(self):
         d = OrderedDict()
-        for key in ["ENTRYTYPE", "ID", "author", "title", "year"]:
+        for key in ["ENTRYTYPE", "ID", "author", "title", "year", "keywords"]:
             if key in self.raw_dict:
                 d[key] = self.raw_dict[key]
         return d

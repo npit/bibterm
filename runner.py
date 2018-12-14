@@ -1,6 +1,8 @@
 from collections import namedtuple
 from reader import Reader
 from visual import setup
+import utils
+from editor import Editor
 # do not use curses, try
 #     http: // urwid.org / tutorial /
 #     or
@@ -15,6 +17,7 @@ class Runner:
         # setup visual
         self.conf = conf
         self.visual = setup(conf)
+        self.editor = None
 
         # read the bib database
         if entry_collection is None:
@@ -26,8 +29,11 @@ class Runner:
 
         self.has_stored_input = False
 
+        # map commands
         ctrl_keys = conf.controls.keys()
-        self.commands = namedtuple("commands", ctrl_keys)(*[conf.controls[k] for k in ctrl_keys])
+        self.commands = namedtuple("controls", ctrl_keys)(*[conf.controls[k] for k in ctrl_keys])
+        edit_ctrl_keys = conf.edit_controls.keys()
+        self.edit_commands = namedtuple("edit_controls", edit_ctrl_keys)(*[conf.edit_controls[k] for k in edit_ctrl_keys])
 
     def tag(self, arg=None):
         if arg is None:
@@ -79,18 +85,55 @@ class Runner:
         ID = thelist[ones_idx - 1]
         self.visual.print_entry_contents(self.entry_collection.entries[ID])
 
-    def select_from_results(self, id_list):
+    # singleton editor fetcher
+    def get_editor(self):
+        if self.editor is None:
+            self.editor = Editor(self.conf)
+        return self.editor
+
+    def string_to_entry_id(self, num_str):
         try:
-            inp = self.visual.input("Inspect [num] or give new command: ")
-            num = int(inp)
-            # it's a number, select from results (0-addressable)
+            num = int(num_str)
+            if not self.entry_collection.num_in_range(num):
+                self.visual.print("{} is outside of entry number range: [1,{}] .".format(num, len(self.entry_collection.id_list)))
+                return None
+            return num
+        except ValueError:
+            self.visual.print("Whoopsie, sth went wrong.")
+            return None
+
+    def modified_collection(self):
+        return self.editor.collection_modified
+
+    def select_from_results(self, id_list):
+        inp = self.visual.input("Inspect/edit: [{}|] [num] or give new command: ".format("|".join(self.edit_commands))).lower()
+        # match command & index
+        if not inp[0].isdigit():
+            # command offered.
+            cmd, *arg = inp.split(maxsplit=1)
+            if utils.matches(cmd, "tag"):
+                # arg has to be a single string
+                num = self.string_to_entry_id(arg[0])
+                if num is None:
+                    return True
+                updated_entry = self.get_editor().tag(self.entry_collection.entries[id_list[num-1]])
+                if self.editor.collection_modified:
+                    self.entry_collection.replace(updated_entry)
+                return True
+            else:
+                # not an edit command, pass it on to the main loop
+                self.has_stored_input = True
+                self.stored_input = inp
+                return False
+                # self.visual.print("[{}] is not a command.".format(cmd))
+                # return True
+        else:
+            # no command offered: it's a number, select from results (0-addressable)
+            num = self.string_to_entry_id(inp)
+            if num is None:
+                return True
             self.inspect_entry(id_list, num)
             return True
-        except ValueError:
-            # not a number, store input to process in next loop
-            self.has_stored_input = True
-            self.stored_input = inp
-            return False
 
     def get_stored_input(self):
         self.has_stored_input = False

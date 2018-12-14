@@ -46,13 +46,10 @@ def merge(conf, vis, args, string_data=None):
         vis.print("Inspecting the merged collection.")
         runner = Runner(conf, entry_collection=merged_collection)
         runner.loop()
-        what = vis.input("Proceed to write?", "*yes no")
-        if utils.matches(what, "yes"):
-            writer.write(merged_collection)
-            vis.print("Wrote!")
-        else:
-            vis.print("Aborting.")
+        self.write_confirm(entry_collection)
     else:
+        vis.print("Writing updated library.")
+        writer.write(merged_collection)
         clipboard.copy(citation_key)
         vis.print("Copied citation key to clipboard: {}".format(citation_key))
 
@@ -86,7 +83,6 @@ def main():
             res = getter.get(" ".join(args))
             # from here, merge from copied string
             merge(conf, vis, None, string_data=res)
-            breakpoint()
             return
 
         elif cmd == "inspect":
@@ -111,6 +107,10 @@ def main():
     # if no action specified, explore
     runner = Runner(conf)
     runner.loop()
+    if runner.modified_collection():
+        vis.print("Collection modified.")
+        writer = BibWriter(conf)
+        writer.write_confirm(runner.entry_collection)
 
 
 if __name__ == '__main__':

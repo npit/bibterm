@@ -72,3 +72,11 @@ class BibWriter:
         self.visual.print("Writing {} items to {}".format(len(entry_collection.bibtex_db.entries), self.bib_path))
         with open(self.bib_path, "w") as f:
             bibtexparser.dump(entry_collection.get_writable_db(), f)
+
+    def write_confirm(self, entry_collection):
+        what = self.visual.input("Proceed to write?", "*yes no")
+        if utils.matches(what, "yes"):
+            self.write(entry_collection)
+            self.visual.print("Wrote!")
+        else:
+            self.visual.print("Aborting.")

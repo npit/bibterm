@@ -7,7 +7,7 @@ from fuzzywuzzy import process
 def setup(conf):
     try:
         if conf.visual == "default":
-            return Io()
+            return Io.get_instance()
         else:
             print("Undefined IO config:", conf.io)
             exit(1)
@@ -17,7 +17,12 @@ def setup(conf):
 
 
 class Io:
+
     default_option_mark = "*"
+
+    def get_instance():
+        return Io()
+
     def idle(self):
         print("Give command: ", end="")
 
@@ -49,6 +54,8 @@ class Io:
                 opt_print[default_idx] = self.default_option_mark + opt_print[default_idx]
             opt_print = " ".join(opt_print)
             msg += " " + opt_print + ": "
+        else:
+            msg += ": "
 
         while True:
             ans = input(msg)
@@ -60,6 +67,8 @@ class Io:
                 if not utils.matches(ans, opts):
                     self.print("Valid options are: " + opt_print)
                     continue
+            else:
+                ans = ans.strip()
             # valid or no-option input
             return ans
 
