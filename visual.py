@@ -128,7 +128,9 @@ class Io:
                     print_dots = False
 
     def print_entry_contents(self, entry):
+        self.print("---------------")
         self.print(json.dumps(entry.get_pretty_dict(), indent=2))
+        self.print("---------------")
 
 
 # blessings ncurses for humans

@@ -66,8 +66,8 @@ def main():
     parser = argparse.ArgumentParser(description="\n".join(help_str))
     parser.add_argument("actions", nargs="*", help="Available: {}".format(", ".join(conf.actions)))
     args = parser.parse_args()
-
     vis = visual.setup(conf)
+    runner, input_cmd = None, None
 
     if args.actions:
         cmd, *args = args.actions
@@ -95,18 +95,18 @@ def main():
             runner.loop()
             return
         else:
-            # then it has to be a runner control
+            # then it has to be a runner control, pass it down
             runner = Runner(conf)
-            if any([cmd.startswith(x) for x in conf.controls.values()]):
-                runner.loop(input_cmd=cmd)
-            else:
+            if not any([cmd.startswith(x) for x in conf.controls.values()]):
                 print("Undefined command: {}".format(cmd))
-
-            return
+                return
+            # else, pass it down
+            input_cmd = cmd
 
     # if no action specified, explore
-    runner = Runner(conf)
-    runner.loop()
+    if runner is None:
+        runner = Runner(conf)
+    runner.loop(input_cmd=cmd)
     if runner.modified_collection():
         vis.print("Collection modified.")
         writer = BibWriter(conf)

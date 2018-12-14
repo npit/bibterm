@@ -283,6 +283,7 @@ class Entry:
 
     def set_keywords(self, kw):
         self.raw_dict["keywords"] = kw
+        self.keywords = kw
 
     def get_pretty_dict(self):
         d = OrderedDict()

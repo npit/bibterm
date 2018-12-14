@@ -92,7 +92,7 @@ class Runner:
             self.editor = Editor(self.conf)
         return self.editor
 
-    def string_to_entry_id(self, num_str):
+    def string_to_entry_num(self, num_str):
         try:
             num = int(num_str)
             if not self.entry_collection.num_in_range(num):
@@ -107,25 +107,26 @@ class Runner:
         return self.editor.collection_modified
 
     def select_from_results(self, id_list):
+        print("Selecting from results, len {}".format(len(id_list)))
         inp = self.visual.input("Inspect/edit: [{}|] [num] or give new command: ".format("|".join(self.edit_commands))).lower()
         # match command & index
-        breakpoint()
         if not inp[0].isdigit():
             # command offered.
-            cmd, *arg = inp.split(maxsplit=1)
+            cmd, *arg = inp.split()
             if utils.matches(cmd, "tag"):
                 # arg has to be a single string
                 if not arg and self.cached_selection is not None:
                     nums = self.cached_selection
                 else:
-                    nums = [self.string_to_entry_id(x) for x in arg]
+                    nums = [self.string_to_entry_num(x) for x in arg]
                     if any([x is None for x in nums]) or not nums:
                         self.visual.print("Need a valid entry index.")
                         return True
                 for num in nums:
                     updated_entry = self.get_editor().tag(self.entry_collection.entries[id_list[num-1]])
-                    if self.editor.collection_modified:
+                    if self.editor.collection_modified and updated_entry is not None:
                         self.entry_collection.replace(updated_entry)
+                self.editor.clear_cache()
                 return True
             else:
                 # not an edit command, pass it on to the main loop
@@ -136,11 +137,12 @@ class Runner:
                 # return True
         else:
             # no command offered: it's a number, select from results (0-addressable)
-            num = self.string_to_entry_id(inp)
-            if num is None:
-                return True
-            self.inspect_entry(id_list, num)
-            self.cached_selection = num
+            nums = [self.string_to_entry_num(x) for x in inp.split()]
+            for num in nums:
+                if num is None:
+                    return True
+                self.inspect_entry(id_list, num)
+            self.cached_selection = nums
             return True
 
     def get_stored_input(self):
