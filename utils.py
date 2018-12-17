@@ -6,3 +6,14 @@ def matches(s, opts):
                 return True
         return False
     return s == opts or opts.startswith(s)
+
+def get_index_list(inp):
+    idxs = []
+    try:
+        if type(inp) == str:
+            inp = inp.strip().split()
+        for x in inp:
+            idxs.append(int(x))
+        return idxs
+    except:
+        return None

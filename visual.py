@@ -7,7 +7,7 @@ from fuzzywuzzy import process
 def setup(conf):
     try:
         if conf.visual == "default":
-            return Io.get_instance()
+            return Io.get_instance(conf=conf)
         else:
             print("Undefined IO config:", conf.io)
             exit(1)
@@ -19,9 +19,15 @@ def setup(conf):
 class Io:
 
     default_option_mark = "*"
+    instance = None
 
-    def get_instance():
-        return Io()
+    def __init__(self, conf):
+        self.do_debug = conf.debug
+
+    def get_instance(conf=None):
+        if conf is not None:
+            Io.instance = Io(conf)
+        return Io.instance
 
     def idle(self):
         print("Give command: ", end="")
@@ -36,10 +42,14 @@ class Io:
         self.print(msg)
         exit(1)
 
-    def input(self, msg="", options_str=None):
+    # func to show choices. Bang options are explicit and are not edited
+    def input(self, msg="", options_str=None, check=True):
         default_idx = None
         if options_str is not None:
             opts = options_str.split()
+            explicit_opts = [x[1:] for x in opts if x.startswith("#")]
+            opts = [x for x in opts if not x.startswith("#")]
+
             default_idx = [i for i in range(len(opts)) if opts[i].startswith(self.default_option_mark)]
             if default_idx:
                 if len(default_idx) > 1:
@@ -52,7 +62,7 @@ class Io:
             if default_idx is not None:
                 # add asterisk on print
                 opt_print[default_idx] = self.default_option_mark + opt_print[default_idx]
-            opt_print = " ".join(opt_print)
+            opt_print = " ".join(opt_print + explicit_opts)
             msg += " " + opt_print + ": "
         else:
             msg += ": "
@@ -63,10 +73,11 @@ class Io:
                 # default option on empty input
                 if not ans and default_idx is not None:
                     return opts[default_idx]
-                # loop on invalid input
-                if not utils.matches(ans, opts):
-                    self.print("Valid options are: " + opt_print)
-                    continue
+                # loop on invalid input, if check
+                if check:
+                    if not utils.matches(ans, opts):
+                        self.print("Valid options are: " + opt_print)
+                        continue
             else:
                 ans = ans.strip()
             # valid or no-option input
@@ -88,6 +99,15 @@ class Io:
         numpad = len(str(maxnum)) - len(str(num))
         return "[{}]{}".format(num, " " * numpad)
 
+    # enumerate a collection with indexes
+    def enum(self, x_iter):
+        return ["{} {}".format(self.num_str(i+1, len(x_iter)), x_iter[i]) for i in range(len(x_iter))]
+
+    def print_enum(self, x_iter):
+        for s in self.enum(x_iter):
+            self.print(s)
+
+
     def gen_entry_enum_strings(self, entry, maxlens, num, max_num=None):
         if max_num is None:
             max_num = maxlens[0]
@@ -101,9 +121,13 @@ class Io:
             enum_str_list.append(self.gen_entry_enum_strings(entry, maxlens, i + 1))
         return enum_str_list
 
+    def debug(self, msg):
+        if self.do_debug:
+            return
+        self.print("debug:{}".format(msg))
+
     # print a list of entries
     def print_entries_enum(self, x_iter, entry_collection, at_most=None):
-        
         if at_most and len(x_iter) > at_most:
             idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]
         else:

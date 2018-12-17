@@ -46,7 +46,7 @@ def merge(conf, vis, args, string_data=None):
         vis.print("Inspecting the merged collection.")
         runner = Runner(conf, entry_collection=merged_collection)
         runner.loop()
-        self.write_confirm(entry_collection)
+        writer.write_confirm(merged_collection)
     else:
         vis.print("Writing updated library.")
         writer.write(merged_collection)
@@ -60,12 +60,15 @@ def main():
 
     # read bib database configuration
     conf_dict = get_config()
-    conf = to_namedtuple(conf_dict)
 
     # args
     parser = argparse.ArgumentParser(description="\n".join(help_str))
-    parser.add_argument("actions", nargs="*", help="Available: {}".format(", ".join(conf.actions)))
+    parser.add_argument("actions", nargs="*", help="Available: {}".format(", ".join(conf_dict["actions"])))
+    parser.add_argument("-d", "--debug", action="store_true", help="Debug mode.")
     args = parser.parse_args()
+
+    conf_dict["debug"] = True if "debug" in args else False
+    conf = to_namedtuple(conf_dict)
     vis = visual.setup(conf)
     runner, input_cmd = None, None
 
@@ -106,7 +109,7 @@ def main():
     # if no action specified, explore
     if runner is None:
         runner = Runner(conf)
-    runner.loop(input_cmd=cmd)
+    runner.loop(input_cmd=input_cmd)
     if runner.modified_collection():
         vis.print("Collection modified.")
         writer = BibWriter(conf)

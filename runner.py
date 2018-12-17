@@ -155,6 +155,35 @@ class Runner:
         while self.select_from_results(self.entry_collection.id_list):
             pass
 
+    # show entries matching a filter
+    def filter(self, filter_key, filter_value, force_exact_match=False):
+        valid_keys = ["ID", "title", "keywords"]
+        if filter_key not in valid_keys:
+            self.visual.warn("Must filter with a key in: {}".format(valid_keys))
+            return
+        values_ids_dict = {}
+        # get candidate values, as key to a value: entry_id dict
+        for x in self.entry_collection.id_list:
+            entry = self.entry_collection.entries[x]
+            if filter_key == "keywords":
+                # if filtering by keywords, gotta flesh out the list members
+                if entry.keywords is not None:
+                    keywords = getattr(self.entry_collection.entries[x], filter_key)
+                    print(keywords)
+                    for kw in keywords:
+                        values_ids_dict[kw.lower()] = x
+            else:
+                breakpoint()
+                values_ids_dict = {getattr(entry, filter_key).lower(): x for x in self.entry_collection.id_list }
+        # search
+        breakpoint()
+        res = self.visual.search(filter_value, values_ids_dict.keys(), self.max_search)
+        id_list = [values_ids_dict[r[0]] for r in res]
+        self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in id_list], self.entry_collection)
+        breakpoint()
+
+
+
     def check_dual_input(self, command):
         try:
             parts = command.split(maxsplit=1)
@@ -165,6 +194,7 @@ class Runner:
             return command, None
 
     def loop(self, input_cmd=None):
+        # self.filter("keywords", "deep")
         previous_command = None
         while(True):
             # begin loop

@@ -1,4 +1,5 @@
 import os
+import json
 import utils
 from collections import OrderedDict
 from stopwords import stopwords
@@ -19,7 +20,10 @@ class EntryCollection:
     fixes = 0
     entries_fixed = 0
 
-    def __init__(self, bib_db):
+    def get_tag_information(self):
+        return {"keep": list(self.keyword2id.keys()), "map": self.keywords_map}
+
+    def __init__(self, bib_db, tags_info):
         self.bibtex_db = bib_db
         self.title2id = {}
         self.entries = {}
@@ -27,6 +31,12 @@ class EntryCollection:
         self.maxlen_title = 0
         self.id_list = []
         self.title_list = []
+        self.keywords_discard = set()
+        self.keywords_map = tags_info["map"]
+        self.keyword2id = {kw: [] for kw in tags_info["keep"]}
+        for valuelist in self.keywords_map.values():
+            for value in valuelist:
+                self.keyword2id[value] = []
 
         # check for duplicate ids
         all_ids = [x["ID"] for x in bib_db.entries]
@@ -47,7 +57,6 @@ class EntryCollection:
             # print("title list:", len(self.title_list))
             ent = Entry(entry)
             self.insert(ent)
-
 
     # check if num in [1, num_entries]
     def num_in_range(self, num):
@@ -108,6 +117,89 @@ class EntryCollection:
                 self.bibtex_db.entries[i]["ID"] = expected_id
                 break
 
+    def add_keyword_instance(self, kw, entry_id):
+        if kw not in self.keyword2id:
+            self.keyword2id[kw] = []
+        self.keyword2id[kw].append(entry_id)
+
+    def change_keyword(self, kw, new_kws, entry_id):
+        if kw in self.keywords_map and self.keywords_map[kw] != new_kws:
+            self.visual.print("Specified different mapping: {} to existing one: {}, for encountered keyword: {}".format(kw, self.keywords_map[kw], new_kws))
+
+        self.keywords_map[kw] = new_kws
+        for nkw in new_kws:
+            self.add_keyword_instance(nkw, entry_id)
+
+    def handle_keywords(self, ent, index_id):
+        applied_changes = False
+        if ent.keywords is None:
+            return ent, False
+        keywords = []
+        keywords_final = []
+        for raw_kw in ent.keywords:
+            kw = raw_kw.lower()
+            # replace spaces with dashes
+            kw = re.sub("[ ]+", "-", kw)
+            kw = re.sub('[^a-zA-Z-]+', '', kw)
+            if not kw:
+                continue
+            if kw != raw_kw:
+                self.fixes += 1
+                self.visual.print("Correcting {}/{} (#{} fixed, {} fixes) [keyword] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, raw_kw, kw))
+                applied_changes = True
+            # filter out rejected ones
+            if kw in self.keywords_discard:
+                continue
+            # map the out mapped ones
+            if kw in self.keywords_map:
+                for value in self.keywords_map[kw]:
+                    self.add_keyword_instance(value, index_id)
+                    keywords_final.append(value)
+                continue
+            # and the encountered approved ones
+            if kw in self.keyword2id:
+                self.add_keyword_instance(kw, index_id)
+                keywords_final.append(kw)
+                continue
+            keywords.append(kw)
+
+        while keywords:
+            self.visual.print_enum(keywords)
+            what = self.visual.input("Process keywords for entry [{}] ".format(index_id), "*keep discard change #1 #2 #... #|  #*all", check=False)
+            try:
+                cmd, *idx_args = what.strip().split()
+                idx_list = [i-1 for i in utils.get_index_list(idx_args)]
+                if not idx_list:
+                    idx_list = range(len(keywords))
+                elif utils.matches(cmd, 'all'):
+                    idx_list = range(len(keywords))
+
+                if utils.matches(cmd, "keep"):
+                    applied_changes = True
+                    for i in idx_list:
+                        self.add_keyword_instance(keywords[i], index_id)
+                        keywords_final.append(keywords[i])
+                elif utils.matches(cmd, "change"):
+                    applied_changes = True
+                    new_kws = self.visual.input("Change keywords: {} to what?".format([keywords[i] for i in idx_list]))
+                    new_kws = new_kws.strip().split()
+                    for i in idx_list:
+                        self.change_keyword(keywords[i], new_kws, index_id)
+                    keywords_final.extend(new_kws)
+                elif utils.matches(cmd, "discard"):
+                    applied_changes = True
+                else:
+                    self.visual.print("Invalid input.")
+                    continue
+                # remove used up indexes
+                keywords = [keywords[i] for i in range(len(keywords)) if i not in idx_list]
+            except:
+                self.visual.print("Something went wrong, check your input.")
+
+        # assign to the entry object
+        ent.keywords = list(set(keywords_final))
+        return ent, applied_changes
+
     def fix_entry(self, ent):
         fixed_entry = False
         ID = ent.ID
@@ -120,6 +212,7 @@ class EntryCollection:
             missing_fields.append("author")
         if ent.year is None:
             missing_fields.append("year")
+
         if missing_fields:
             self.visual.print("Missing fields: {}".format(missing_fields))
             self.visual.print_entry_contents(ent)
@@ -147,7 +240,14 @@ class EntryCollection:
                     ent.ID = expected_id
                     ID = expected_id
                     fixed_entry = True
-
+        ent, applied_changes = self.handle_keywords(ent, ID)
+        if applied_changes:
+            fixed_entry = True
+            kw_str = ",".join(ent.keywords)
+            self.bibtex_db.entries_dict[ID]["keywords"] = kw_str
+            for i in range(len(self.entries)):
+                if self.bibtex_db.entries[i]["ID"] == ID:
+                    self.bibtex_db.entries[i]["keywords"] = kw_str
         # fix title
         if title != title.strip() or title.strip()[-1] == ".":
             if self.need_fix(ID, "title artifacts"):
@@ -303,6 +403,7 @@ class Reader:
         Entry.visual = self.visual
         EntryCollection.visual = self.visual
         self.bib_path = conf.bib_path
+        self.tags_path = os.path.splitext(self.bib_path)[0] + ".tags.json"
         self.temp_dir = "/tmp/bib/"
         os.makedirs(self.temp_dir, exist_ok=True)
 
@@ -380,7 +481,17 @@ class Reader:
             db = bibtexparser.load(f, parser=parser)
             self.visual.print("Loaded {} entries from file {}.".format(len(db.entries), self.bib_path))
         self.db = db
-        self.entry_collection = EntryCollection(db)
+        with open(self.tags_path) as f:
+            self.tags_info = json.load(f)
+        self.entry_collection = EntryCollection(db, self.tags_info)
+
+        updated_tags = self.entry_collection.get_tag_information()
+        if updated_tags != self.tags_info:
+            self.tags_info = updated_tags
+            what = self.visual.input("Write updated tags to the original file: {}?".format(self.tags_path), "yes *no")
+            if utils.matches(what, "yes"):
+                with open(self.tags_path, "w") as f:
+                    json.dump(json.dumps(updated_tags, indent=4, sort_keys=True), f)
 
         if self.entry_collection.entries_fixed > 0:
             self.visual.print("Applied a total of {} fixes to {} entries.".format(self.entry_collection.fixes, self.entry_collection.entries_fixed))
