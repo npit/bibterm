@@ -104,6 +104,8 @@ class Runner:
             return None
 
     def modified_collection(self):
+        if self.editor is None:
+            return False
         return self.editor.collection_modified
 
     def select_from_results(self, id_list):
@@ -123,7 +125,7 @@ class Runner:
                         self.visual.print("Need a valid entry index.")
                         return True
                 for num in nums:
-                    updated_entry = self.get_editor().tag(self.entry_collection.entries[id_list[num-1]])
+                    updated_entry = self.get_editor().tag(self.entry_collection.entries[id_list[num - 1]])
                     if self.editor.collection_modified and updated_entry is not None:
                         self.entry_collection.replace(updated_entry)
                 self.editor.clear_cache()
@@ -174,15 +176,19 @@ class Runner:
                         values_ids_dict[kw.lower()] = x
             else:
                 breakpoint()
-                values_ids_dict = {getattr(entry, filter_key).lower(): x for x in self.entry_collection.id_list }
+                values_ids_dict = {getattr(entry, filter_key).lower(): x for x in self.entry_collection.id_list}
         # search
-        breakpoint()
         res = self.visual.search(filter_value, values_ids_dict.keys(), self.max_search)
-        id_list = [values_ids_dict[r[0]] for r in res]
-        self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in id_list], self.entry_collection)
-        breakpoint()
-
-
+        # show results
+        if filter_key in ["ID", "title"]:
+            # show entries
+            id_list = [values_ids_dict[r[0]] for r in res]
+            self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in id_list], self.entry_collection)
+        else:
+            # show results themselves
+            self.visual.print_enum([r[0] for r in res])
+        while self.select_from_results(self.entry_collection.id_list):
+            pass
 
     def check_dual_input(self, command):
         try:
