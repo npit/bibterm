@@ -38,8 +38,12 @@ def set_defaults(conf):
                         "quit": "q",
                         "tag": "t"}
 
+    conf["list_controls"] = {"tag": "t",
+                             "open": "o"}
+
     conf["actions"] = ["get", "merge", "inspect"]
     conf["visual"] = "default"
+    conf["pdf_dir"] = join(dirname(conf.bib_path), "pdfs")
     return conf
 
 

@@ -1,3 +1,5 @@
+import os
+
 # check if s equals or is the start of opts or any of its elements
 def matches(s, opts):
     if type(opts) == list:
@@ -19,6 +21,16 @@ def get_index_list(inp):
     except:
         return None
 
+
+def fix_file_path(path, pdf_dir=None):
+    if path.endswith(":pdf"):
+        path = path[:-4]
+    if path.startswith(":home"):
+        path = "/" + path[1:]
+    if pdf_dir is not None:
+        if not path.startswith("/home"):
+            path = os.path.join(pdf_dir, path)
+    return path
 
 # debug with statement for visual
 class OnlyDebug:

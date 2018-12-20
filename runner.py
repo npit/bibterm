@@ -33,8 +33,8 @@ class Runner:
         # map commands
         ctrl_keys = conf.controls.keys()
         self.commands = namedtuple("controls", ctrl_keys)(*[conf.controls[k] for k in ctrl_keys])
-        edit_ctrl_keys = conf.edit_controls.keys()
-        self.edit_commands = namedtuple("edit_controls", edit_ctrl_keys)(*[conf.edit_controls[k] for k in edit_ctrl_keys])
+        list_ctrl_keys = conf.list_controls.keys()
+        self.edit_commands = namedtuple("list_controls", list_ctrl_keys)(*[conf.list_controls[k] for k in list_ctrl_keys])
 
         self.searchable_fields = ["ID", "title"]
         self.multivalue_keys = ["author", "keywords"]
@@ -121,6 +121,7 @@ class Runner:
         if not inp[0].isdigit():
             # command offered.
             cmd, *arg = inp.split()
+
             if utils.matches(cmd, "tag"):
                 # arg has to be a single string
                 if not arg and self.cached_selection is not None:
@@ -136,6 +137,19 @@ class Runner:
                         self.entry_collection.replace(updated_entry)
                 self.editor.clear_cache()
                 return True
+            elif utils.matches(cmd, "open"):
+                # arg has to be a single string
+                if not arg and self.cached_selection is not None:
+                    nums = self.cached_selection
+                else:
+                    nums = [self.string_to_entry_num(x) for x in arg]
+                    if any([x is None for x in nums]) or not nums:
+                        self.visual.print("Need a valid entry index.")
+                        return True
+                for num in nums:
+                    self.get_editor().open(self.entry_collection.entries[id_list[num - 1]])
+                return True
+
             else:
                 # not an edit command, pass it on to the main loop
                 self.has_stored_input = True

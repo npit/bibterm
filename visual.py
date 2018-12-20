@@ -47,9 +47,12 @@ class Io:
             return
         print(msg)
 
-    def error(self, msg):
-        self.print(msg)
+    def fatal_error(self, msg):
+        self.error(msg)
         exit(1)
+
+    def error(self, msg):
+        self.print("Error: " + msg)
 
     # func to show choices. Bang options are explicit and are not edited
     def input(self, msg="", options_str=None, check=True):

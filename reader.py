@@ -370,6 +370,9 @@ class Entry:
             self.__setattr__(key, kv[key])
         self.raw_dict = kv
 
+    def has_file(self):
+        return self.file is not None
+
     def has_keywords(self):
         return self.keywords is not None
 
@@ -387,7 +390,7 @@ class Entry:
 
     def get_pretty_dict(self):
         d = OrderedDict()
-        for key in ["ENTRYTYPE", "ID", "author", "title", "year", "keywords"]:
+        for key in ["ENTRYTYPE", "ID", "author", "title", "year", "keywords", "file"]:
             if key in self.raw_dict:
                 d[key] = self.raw_dict[key]
         return d
