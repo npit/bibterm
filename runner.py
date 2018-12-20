@@ -36,6 +36,10 @@ class Runner:
         edit_ctrl_keys = conf.edit_controls.keys()
         self.edit_commands = namedtuple("edit_controls", edit_ctrl_keys)(*[conf.edit_controls[k] for k in edit_ctrl_keys])
 
+        self.searchable_fields = ["ID", "title"]
+        self.multivalue_keys = ["author", "keywords"]
+        self.searchable_fields += self.multivalue_keys
+
     def tag(self, arg=None):
         if arg is None:
             tag = self.visual.input("Tag:")
@@ -53,29 +57,31 @@ class Runner:
             query = self.visual.input("Search:")
         query = query.lower()
         self.visual.print("Got query: {}".format(query))
+        results_ids, match_scores = [], []
+        # search all searchable fields
+        for field in self.searchable_fields:
+            res = self.filter(field, query)
+            ids, scores = [r[0] for r in res], [r[1] for r in res]
+            with utils.OnlyDebug(self.visual):
+                self.visual.print("Results for query: {} on field: {}".format(query, field))
+                self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids], self.entry_collection, additional_fields=scores, print_newline=True)
 
-        # search ids
-        res = self.visual.search(query, [x.lower() for x in self.entry_collection.entries.keys()], self.max_search * 2)
-        res = [x + ("id",) for x in res]
-        # search titles
-        title_res = self.visual.search(query.lower(), [x.title.lower() for x in self.entry_collection.entries.values()], self.max_search * 2)
-        # filter to ids
-        for t in title_res:
-            match_id = self.entry_collection.title2id[t[0]].lower()
-            if match_id in [x[0] for x in res]:
-                # just add match label
-                for r, x in enumerate(res):
-                    if x[0] == match_id:
-                        res[r] = (x[0], x[1], x[2] + ",title")
-                continue
-            res.append((match_id, t[1], "title"))
-            # sort by score, prune to max
-            res = sorted(res, key=lambda obj: obj[1], reverse=True)[:self.max_search]
+            for i in range(len(ids)):
+                if ids[i] in results_ids:
+                    existing_idx = results_ids.index(ids[i])
+                    # replace score, if it's higher
+                    if scores[i] > match_scores[existing_idx]:
+                        match_scores[existing_idx] = scores[i]
+                else:
+                    # if not there, just append
+                    results_ids.append(ids[i])
+                    match_scores.append(scores[i])
 
-        id_list = [r[0] for r in res]
-        self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in id_list], self.entry_collection)
-        # self.visual.newline()
-        while self.select_from_results(id_list):
+        results_ids = sorted(zip(results_ids, match_scores), key=lambda x: x[1], reverse=True)
+        results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
+
+        self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
+        while self.select_from_results(results_ids):
             pass
 
     # print entry, only fields of interest
@@ -157,39 +163,44 @@ class Runner:
         while self.select_from_results(self.entry_collection.id_list):
             pass
 
+    def is_multivalue_key(self, filter_key):
+        return filter_key in self.multivalue_keys
+
     # show entries matching a filter
-    def filter(self, filter_key, filter_value, force_exact_match=False):
-        valid_keys = ["ID", "title", "keywords"]
-        if filter_key not in valid_keys:
-            self.visual.warn("Must filter with a key in: {}".format(valid_keys))
+    def filter(self, filter_key, filter_value, max_search=None):
+        if max_search is None:
+            max_search = self.max_search
+        if filter_key not in self.searchable_fields:
+            self.visual.warn("Must filter with a key in: {}".format(self.searchable_fields))
             return
-        values_ids_dict = {}
+        candidate_values = []
+        searched_entry_ids = []
         # get candidate values, as key to a value: entry_id dict
         for x in self.entry_collection.id_list:
             entry = self.entry_collection.entries[x]
-            if filter_key == "keywords":
-                # if filtering by keywords, gotta flesh out the list members
-                if entry.keywords is not None:
-                    keywords = getattr(self.entry_collection.entries[x], filter_key)
-                    print(keywords)
-                    for kw in keywords:
-                        values_ids_dict[kw.lower()] = x
+            value = getattr(entry, filter_key)
+            if type(value) == str:
+                value = value.lower()
             else:
-                breakpoint()
-                values_ids_dict = {getattr(entry, filter_key).lower(): x for x in self.entry_collection.id_list}
-        # search
-        res = self.visual.search(filter_value, values_ids_dict.keys(), self.max_search)
-        # show results
-        if filter_key in ["ID", "title"]:
-            # show entries
-            id_list = [values_ids_dict[r[0]] for r in res]
-            self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in id_list], self.entry_collection)
-        else:
-            # show results themselves
-            self.visual.print_enum([r[0] for r in res])
-        while self.select_from_results(self.entry_collection.id_list):
-            pass
+                if value is None:
+                    continue
 
+            searched_entry_ids.append(x)
+            candidate_values.append(value)
+
+        # search and return ids of results
+        res = self.visual.search(filter_value, candidate_values, max_search, self.is_multivalue_key(filter_key))
+        if filter_key == "ID":
+            # return the IDs
+            return [r[0] for r in res]
+        elif filter_key == "title":
+            return [(self.entry_collection.title2id[r[0][0]], r[0][1]) for r in res]
+        elif self.is_multivalue_key(filter_key):
+            # limit results per keyword
+            res = [(searched_entry_ids[r[1]], r[0][1]) for r in res]
+        return res
+
+    # checks wether command and arguments are inserted at once
     def check_dual_input(self, command):
         try:
             parts = command.split(maxsplit=1)
@@ -237,7 +248,7 @@ class Runner:
                 arg = " ".join(arg)
                 if command != self.commands.search:
                     arg = str(command[len(self.commands.search):]) + " " + arg
-                self.search(arg)
+                self.search(arg.lower().strip())
             elif command == self.commands.list:
                 self.list(arg)
             else:

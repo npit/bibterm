@@ -1,6 +1,7 @@
 import json
 import utils
 from fuzzywuzzy import process
+from fuzzywuzzy import fuzz
 
 
 # base class to get and print stuff
@@ -18,8 +19,14 @@ def setup(conf):
 
 class Io:
 
+    only_debug = False
+    do_debug = False
     default_option_mark = "*"
+    score_match_threshold = 50
     instance = None
+
+    def set_only_debug(self, val):
+        self.only_debug = val
 
     def __init__(self, conf):
         self.do_debug = conf.debug
@@ -36,6 +43,8 @@ class Io:
         pass
 
     def print(self, msg=""):
+        if self.only_debug and not self.do_debug:
+            return
         print(msg)
 
     def error(self, msg):
@@ -83,8 +92,30 @@ class Io:
             # valid or no-option input
             return ans
 
-    def search(self, query, candidates, atmost):
-        return process.extract(query, candidates, limit=atmost)
+    def search(self, query, candidates, atmost, iterable_items=False):
+        if iterable_items:
+            # flatten
+            nums = list(map(len, candidates))
+            flattened_candidates = [c for clist in candidates for c in clist]
+            # score
+            raw_results = [(c, fuzz.partial_ratio(query, c)) for c in flattened_candidates]
+            # argmax
+            results, curr_idx = [], 0
+            for n in nums:
+                if n > 1:
+                    max_val = max(raw_results[curr_idx: curr_idx + n], key=lambda x: x[1])
+                else:
+                    max_val = raw_results[curr_idx]
+                results.append(max_val)
+                # print("Got from: {} : {}".format(raw_results[curr_idx: curr_idx + n], max_val))
+                curr_idx += n
+        else:
+            results = [(c, fuzz.partial_ratio(query, c)) for c in candidates]
+        # assign index
+        results = [(results[i], i) for i in range(len(results)) if results[i][1] >= self.score_match_threshold]
+        results = sorted(results, key=lambda x: x[0][1], reverse=True)
+        return results[:atmost]
+        # return process.extract(query, candidates, limit=atmost)
 
     def newline(self):
         self.print()
@@ -95,24 +126,30 @@ class Io:
     def ID_str(self, ID, maxlen_id):
         return "{:<{w}s}".format("\\cite{" + ID + "}", w=maxlen_id + 7)
 
+    def keyword_str(self, keywords):
+        if keywords is None or not keywords:
+            return ""
+        return "({})".format(", ".join(keywords))
+
     def num_str(self, num, maxnum):
         numpad = len(str(maxnum)) - len(str(num))
         return "[{}]{}".format(num, " " * numpad)
 
     # enumerate a collection with indexes
     def enum(self, x_iter):
-        return ["{} {}".format(self.num_str(i+1, len(x_iter)), x_iter[i]) for i in range(len(x_iter))]
+        return ["{} {}".format(self.num_str(i + 1, len(x_iter)), x_iter[i]) for i in range(len(x_iter))]
 
     def print_enum(self, x_iter):
+        if self.only_debug and not self.do_debug:
+            return
         for s in self.enum(x_iter):
             self.print(s)
-
 
     def gen_entry_enum_strings(self, entry, maxlens, num, max_num=None):
         if max_num is None:
             max_num = maxlens[0]
         return (self.num_str(num, max_num), self.ID_str(entry.ID, maxlens[1]),
-                self.title_str(entry.title, maxlens[2]))
+                self.title_str(entry.title, maxlens[2]), self.keyword_str(entry.keywords))
 
     # produce enumeration strings
     def gen_entries_enum_strings(self, entries, maxlens):
@@ -127,7 +164,11 @@ class Io:
         self.print("debug:{}".format(msg))
 
     # print a list of entries
-    def print_entries_enum(self, x_iter, entry_collection, at_most=None):
+    def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False):
+        if self.only_debug and not self.do_debug:
+            return
+        if not x_iter:
+            return
         if at_most and len(x_iter) > at_most:
             idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]
         else:
@@ -143,15 +184,24 @@ class Io:
 
         strings = self.gen_entries_enum_strings(x_iter, maxlens)
         print_dots = True
+
         for i, tup in enumerate(strings):
             if i in idxs_print:
-                self.print("{} {} {}".format(*tup))
+                print_str = "{} {} {} {}".format(*tup)
+                if additional_fields is not None:
+                    print_str += " {}".format(additional_fields[i])
+                self.print(print_str)
+
             else:
                 if print_dots:
                     self.print("...")
                     print_dots = False
+        if print_newline:
+            self.newline()
 
     def print_entry_contents(self, entry):
+        if self.only_debug and not self.do_debug:
+            return
         self.print("---------------")
         self.print(json.dumps(entry.get_pretty_dict(), indent=2))
         self.print("---------------")
@@ -159,17 +209,18 @@ class Io:
 
 # blessings ncurses for humans
 class Blessings(Io):
-    def idle(self):
-        print("Give command.")
+    pass
+    # def idle(self):
+    #     print("Give command.")
 
-    def print(self, msg):
-        print(msg)
+    # def print(self, msg):
+    #     print(msg)
 
-    def input(self, msg=""):
-        return input(msg)
+    # def input(self, msg=""):
+    #     return input(msg)
 
-    def search(self, query, candidates, atmost):
-        return process.extract(query, candidates, limit=atmost)
+    # def search(self, query, candidates, atmost):
+    #     return process.extract(query, candidates, limit=atmost)
 
-    def newline(self):
-        print()
+    # def newline(self):
+    #     print()

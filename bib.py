@@ -67,7 +67,7 @@ def main():
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode.")
     args = parser.parse_args()
 
-    conf_dict["debug"] = True if "debug" in args else False
+    conf_dict["debug"] = args.debug
     conf = to_namedtuple(conf_dict)
     vis = visual.setup(conf)
     runner, input_cmd = None, None
