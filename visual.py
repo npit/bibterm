@@ -162,9 +162,9 @@ class Io:
         return enum_str_list
 
     def debug(self, msg):
-        if self.do_debug:
+        if not self.do_debug:
             return
-        self.print("debug:{}".format(msg))
+        self.print("debug: {}".format(msg))
 
     # print a list of entries
     def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False):

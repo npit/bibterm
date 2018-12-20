@@ -40,17 +40,9 @@ class Runner:
         self.multivalue_keys = ["author", "keywords"]
         self.searchable_fields += self.multivalue_keys
 
-    def tag(self, arg=None):
-        if arg is None:
-            tag = self.visual.input("Tag:")
-        self.visual.print("got tag: {}".format(tag))
-        try:
-            for ent in self.entry_collection.entries.values:
-                if not ent.has_keywords() or not ent.has_keyword(tag):
-                    continue
-                self.visual.print("[{}] {}".format(ent.ID, " ".join(ent.keywords)))
-        except Exception as x:
-            print(x)
+        # the entry collection on which commands are executed -- initialized as the whole collection
+        self.reference_entry_list = self.entry_collection.id_list
+        self.reference_history = []
 
     def search(self, query=None):
         if query is None:
@@ -81,15 +73,16 @@ class Runner:
         results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
 
         self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
-        while self.select_from_results(results_ids):
-            pass
+        self.push_reference_list(results_ids)
+        # while self.select_from_results(results_ids):
+        #     pass
 
     # print entry, only fields of interest
-    def inspect_entry(self, thelist, ones_idx):
-        if not isinstance(ones_idx, int) or ones_idx > len(thelist) or ones_idx < 1:
-            self.visual.print("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(thelist)))
+    def inspect_entry(self, ones_idx):
+        if not isinstance(ones_idx, int) or ones_idx > len(self.reference_entry_list) or ones_idx < 1:
+            self.visual.print("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(self.reference_entry_list)))
             return
-        ID = thelist[ones_idx - 1]
+        ID = self.reference_entry_list[ones_idx - 1]
         self.visual.print_entry_contents(self.entry_collection.entries[ID])
 
     # singleton editor fetcher
@@ -114,68 +107,30 @@ class Runner:
             return False
         return self.editor.collection_modified
 
-    def select_from_results(self, id_list):
-        print("Selecting from results, len {}".format(len(id_list)))
-        inp = self.visual.input("Inspect/edit: [{}|] [num] or give new command: ".format("|".join(self.edit_commands))).lower()
-        # match command & index
-        if not inp[0].isdigit():
-            # command offered.
-            cmd, *arg = inp.split()
-
-            if utils.matches(cmd, "tag"):
-                # arg has to be a single string
-                if not arg and self.cached_selection is not None:
-                    nums = self.cached_selection
-                else:
-                    nums = [self.string_to_entry_num(x) for x in arg]
-                    if any([x is None for x in nums]) or not nums:
-                        self.visual.print("Need a valid entry index.")
-                        return True
-                for num in nums:
-                    updated_entry = self.get_editor().tag(self.entry_collection.entries[id_list[num - 1]])
-                    if self.editor.collection_modified and updated_entry is not None:
-                        self.entry_collection.replace(updated_entry)
-                self.editor.clear_cache()
-                return True
-            elif utils.matches(cmd, "open"):
-                # arg has to be a single string
-                if not arg and self.cached_selection is not None:
-                    nums = self.cached_selection
-                else:
-                    nums = [self.string_to_entry_num(x) for x in arg]
-                    if any([x is None for x in nums]) or not nums:
-                        self.visual.print("Need a valid entry index.")
-                        return True
-                for num in nums:
-                    self.get_editor().open(self.entry_collection.entries[id_list[num - 1]])
-                return True
-
-            else:
-                # not an edit command, pass it on to the main loop
-                self.has_stored_input = True
-                self.stored_input = inp
-                return False
-                # self.visual.print("[{}] is not a command.".format(cmd))
-                # return True
-        else:
+    def select(self, inp):
             # no command offered: it's a number, select from results (0-addressable)
-            nums = [self.string_to_entry_num(x) for x in inp.split()]
+            nums = utils.get_index_list(inp)
             for num in nums:
-                if num is None:
-                    return True
-                self.inspect_entry(id_list, num)
+                self.inspect_entry(num)
             self.cached_selection = nums
-            return True
 
     def get_stored_input(self):
         self.has_stored_input = False
         return self.stored_input
 
     def list(self, arg=None):
-        self.visual.print_entries_enum(self.entry_collection.entries.values(), self.entry_collection)
+        show_list = self.reference_entry_list
+        if arg is not None and arg:
+            if arg[0].isdigit():
+                show_list = self.reference_entry_list[:int(arg)]
+            else:
+                self.visual.error("Undefined list argument: {}".format(arg))
+        self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection)
+        if len(show_list) < len(self.reference_entry_list):
+            self.push_reference_list(show_list)
         # self.visual.newline()
-        while self.select_from_results(self.entry_collection.id_list):
-            pass
+        # while self.select_from_results(self.entry_collection.id_list):
+        #     pass
 
     def is_multivalue_key(self, filter_key):
         return filter_key in self.multivalue_keys
@@ -190,7 +145,7 @@ class Runner:
         candidate_values = []
         searched_entry_ids = []
         # get candidate values, as key to a value: entry_id dict
-        for x in self.entry_collection.id_list:
+        for x in self.reference_entry_list:
             entry = self.entry_collection.entries[x]
             value = getattr(entry, filter_key)
             if type(value) == str:
@@ -216,21 +171,34 @@ class Runner:
 
     # checks wether command and arguments are inserted at once
     def check_dual_input(self, command):
-        try:
-            parts = command.split(maxsplit=1)
-            if len(parts) == 0:
-                return parts, None
-            return parts[0], parts[1:]
-        except ValueError:
-            return command, None
+        parts = command.split(maxsplit=1)
+        cmd = parts[0]
+        if len(parts) == 1:
+            arg = None
+        else:
+            arg = parts[1]
+        return cmd, arg
+
+    def step_back_history(self):
+        self.reference_entry_list = self.reference_history.pop()
+        self.visual.print("Switching back to {}-long reference list.".format(len(self.reference_entry_list)))
+        self.list()
+
+    # add to reference list history
+    def push_reference_list(self, new_list):
+        if new_list == self.reference_entry_list:
+            return
+        self.reference_history.append(self.reference_entry_list)
+        self.reference_entry_list = new_list
+        self.visual.print("Switching to new {}-long reference list.".format(len(self.reference_entry_list)))
 
     def loop(self, input_cmd=None):
-        # self.filter("keywords", "deep")
         previous_command = None
         while(True):
             # begin loop
             if input_cmd is not None:
                 user_input = input_cmd
+                self.visual.debug("Got input from main: [{}]".format(input_cmd))
                 input_cmd = None
             elif not self.has_stored_input:
                 self.visual.idle()
@@ -241,8 +209,10 @@ class Runner:
                 # self.visual.newline()
                 continue
 
+            print(user_input)
             # check for dual input
             command, arg = self.check_dual_input(user_input)
+            self.visual.debug("Command: [{}] , arg: [{}]".format(command, arg))
 
             # check for repeat-command
             if command == self.commands.repeat:
@@ -254,19 +224,57 @@ class Runner:
             if command == self.commands.quit:
                 break
 
-            if command == self.commands.tag:
-                self.tag(arg)
-
-            elif command.startswith(self.commands.search):
+            if command.startswith(self.commands.search):
                 # concat to a single query
-                arg = " ".join(arg)
                 if command != self.commands.search:
-                    arg = str(command[len(self.commands.search):]) + " " + arg
-                self.search(arg.lower().strip())
-            elif command == self.commands.list:
+                    query = str(command[len(self.commands.search):])
+                    if arg:
+                        query += " " + arg
+                self.search(query.lower().strip())
+            elif utils.matches(command, self.commands.list):
                 self.list(arg)
+            elif utils.matches(command, self.commands.tag):
+                print(self.reference_entry_list)
+                # arg has to be a single string
+                if not arg:
+                    if self.cached_selection is not None:
+                        nums = self.cached_selection
+                    else:
+                        self.visual.error("Need an entry argument to tag.")
+                        continue
+                else:
+                    nums = utils.get_index_list(arg)
+                    if any([x is None for x in nums]) or not nums:
+                        self.visual.print("Need a valid entry index.")
+                        continue
+                for num in nums:
+                    entry = self.entry_collection.entries[self.reference_entry_list[num - 1]]
+                    updated_entry = self.get_editor().tag(entry)
+                    if self.editor.collection_modified and updated_entry is not None:
+                        self.entry_collection.replace(updated_entry)
+                self.editor.clear_cache()
+
+            elif utils.matches(command, "open"):
+                # arg has to be a single string
+                if not arg:
+                    if self.cached_selection is not None:
+                        nums = self.cached_selection
+                    else:
+                        self.visual.error("Need an entry argument to open.")
+                        continue
+                else:
+                    nums = utils.get_index_list(arg)
+                    if any([x is None for x in nums]) or not nums:
+                        self.visual.print("Need a valid entry index.")
+                for num in nums:
+                    self.get_editor().open(self.entry_collection.entries[self.reference_entry_list[num - 1]])
+                return True
+            elif command[0].isdigit():
+                print(self.reference_entry_list)
+                # for numeric input, select these entries
+                self.select(user_input)
             else:
-                print("Undefined command:", command)
-                print("Available:", self.commands)
+                self.visual.error("Undefined command:", command)
+                self.visual.print("Available:", self.commands)
                 continue
             previous_command = command

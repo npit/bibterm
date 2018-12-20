@@ -65,18 +65,18 @@ def main():
     parser = argparse.ArgumentParser(description="\n".join(help_str))
     parser.add_argument("actions", nargs="*", help="Available: {}".format(", ".join(conf_dict["actions"])))
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode.")
-    args = parser.parse_args()
+    parser_args = parser.parse_args()
 
-    conf_dict["debug"] = args.debug
+    conf_dict["debug"] = parser_args.debug
     conf = to_namedtuple(conf_dict)
     vis = visual.setup(conf)
     runner, input_cmd = None, None
 
-    if args.actions:
-        cmd, *args = args.actions
+    if parser_args.actions:
+        cmd, *args = parser_args.actions
 
         if cmd == "merge":
-            merge(conf, vis, args)
+            merge(conf, vis, parser_args)
             return
         elif cmd == "get":
             if not args:
@@ -100,11 +100,11 @@ def main():
         else:
             # then it has to be a runner control, pass it down
             runner = Runner(conf)
-            if not any([cmd.startswith(x) for x in conf.controls.values()]):
-                print("Undefined command: {}".format(cmd))
-                return
+            # if not any([cmd.startswith(x) for x in conf.controls.values()]):
+            #     print("Undefined command: {}".format(cmd))
+            #     return
             # else, pass it down
-            input_cmd = cmd
+            input_cmd = " ".join(parser_args.actions)
 
     # if no action specified, explore
     if runner is None:

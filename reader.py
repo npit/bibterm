@@ -94,10 +94,21 @@ class EntryCollection:
         del self.title2id[title]
 
     def replace(self, ent):
+        print(ent.raw_dict)
+        # keep copies of id and title lists to preserve order
+        id_idx = self.id_list.index(ent.ID.lower())
+        title_idx = self.title_list.index(ent.title.lower())
         # remove existing
         self.remove(ent.ID)
         # insert it
         self.create(ent)
+        # remove from back
+        self.id_list.pop()
+        self.title_list.pop()
+
+        # restore to list position
+        self.id_list.insert(id_idx, ent.ID.lower())
+        self.title_list.insert(title_idx, ent.title.lower())
 
     def correct_id(self, current_id, expected_id):
         # id
@@ -285,9 +296,12 @@ class EntryCollection:
             return self.do_fix
         return fix
 
-    def create(self, ent):
+    def create(self, ent, position=None):
         self.insert(ent, can_fix=False)
-        self.bibtex_db.entries.append(ent.raw_dict)
+        if position is None:
+            self.bibtex_db.entries.append(ent.raw_dict)
+        else:
+            self.bibtex_db.entries.insert(ent.raw_dict, position)
         # the following updates the entries dict
         self.bibtex_db.get_entry_dict()
         # make sure it's there
@@ -461,13 +475,18 @@ class Reader:
             return preprocessed_path
         return bib_path
 
+    def load_collection(self, db):
+        with open(self.tags_path) as f:
+            self.tags_info = json.load(f)
+        return EntryCollection(db, self.tags_info)
+
     # Read from string
     def read_string(self, string):
         parser = BibTexParser()
         parser.customization = Reader.customizations
         db = bibtexparser.loads(string, parser=parser)
         self.visual.print("Loaded {} entries from supplied string.".format(len(db.entries)))
-        self.entry_collection = EntryCollection(db)
+        self.entry_collection = self.load_collection(db)
 
     # Read bibtex file, preprocessing out comments
     def read(self, input_file=None):
@@ -484,9 +503,7 @@ class Reader:
             db = bibtexparser.load(f, parser=parser)
             self.visual.print("Loaded {} entries from file {}.".format(len(db.entries), self.bib_path))
         self.db = db
-        with open(self.tags_path) as f:
-            self.tags_info = json.load(f)
-        self.entry_collection = EntryCollection(db, self.tags_info)
+        self.entry_collection = self.load_collection(db)
 
         updated_tags = self.entry_collection.get_tag_information()
         if updated_tags != self.tags_info:
