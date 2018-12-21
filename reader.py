@@ -94,7 +94,7 @@ class EntryCollection:
         del self.title2id[title]
 
     def replace(self, ent):
-        print(ent.raw_dict)
+        breakpoint()
         # keep copies of id and title lists to preserve order
         id_idx = self.id_list.index(ent.ID.lower())
         title_idx = self.title_list.index(ent.title.lower())
@@ -397,6 +397,10 @@ class Entry:
 
     def get_citation(self):
         return "\\cite{" + self.ID + "}"
+
+    def set_file(self, file_path):
+        self.raw_dict["file"] = file_path
+        self.file = file_path
 
     def set_keywords(self, kw):
         self.raw_dict["keywords"] = kw

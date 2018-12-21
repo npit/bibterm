@@ -3,6 +3,7 @@ from reader import Reader
 from visual import setup
 import utils
 from editor import Editor
+import clipboard
 # do not use curses, try
 #     http: // urwid.org / tutorial /
 #     or
@@ -63,7 +64,7 @@ class Runner:
             ids, scores = [r[0] for r in res], [r[1] for r in res]
             with utils.OnlyDebug(self.visual):
                 self.visual.print("Results for query: {} on field: {}".format(query, field))
-                self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids], self.entry_collection, additional_fields=scores, print_newline=True)
+                self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids], self.entry_collection, additional_fields=list(map(str, scores)), print_newline=True)
 
             for i in range(len(ids)):
                 if ids[i] in results_ids:
@@ -194,8 +195,10 @@ class Runner:
         if self.reference_history_index == index:
             self.visual.print("Already here, m8.")
             return
-        if index > 0 and index < len(self.reference_history):
+        if index >= 0 and index < len(self.reference_history):
             self.step_history(-self.reference_history_index + index)
+        else:
+            self.visual.error("Need an index in [1, {}]".format(len(self.reference_history)))
 
 
     # move the reference list wrt stored history
@@ -248,6 +251,19 @@ class Runner:
             user_input = self.get_stored_input()
         return user_input, input_cmd
 
+    def get_index_selection(self, inp):
+        if not inp:
+            if self.cached_selection is not None:
+                return self.cached_selection
+            # no input provided
+            return []
+        else:
+            nums = utils.get_index_list(inp)
+            if utils.has_none(nums):
+                # non numeric input
+                return None
+            return nums
+
     def loop(self, input_cmd=None):
         previous_command = None
         while(True):
@@ -285,6 +301,24 @@ class Runner:
                 self.jump_history(idx - 1)
             elif command == self.commands.history_show:
                 self.show_history()
+            elif utils.matches(command, self.commands.cite):
+                nums = self.get_index_selection(arg)
+                if nums is None or not nums:
+                    self.visual.error("Need a selection to cite.")
+                    continue
+                citation = "\\cite{{{}}}".format(", ".join([self.reference_entry_list[n-1] for n in nums]))
+                clipboard.copy(citation)
+                self.visual.print("Copied to clipboard: {}".format(citation))
+            elif command.startswith(self.commands.pdf_file):
+                nums = self.get_index_selection(arg)
+                if nums is None or not nums:
+                    self.visual.error("Need a selection to cite.")
+                    continue
+                for n in nums:
+                    entry = self.entry_collection.entries[self.reference_entry_list[n-1]]
+                    updated_entry = self.get_editor().set_file(entry)
+                    if self.editor.collection_modified and updated_entry is not None:
+                        self.entry_collection.replace(updated_entry)
             elif command.startswith(self.commands.search):
                 # concat to a single query
                 if command != self.commands.search:
@@ -295,19 +329,10 @@ class Runner:
             elif utils.matches(command, self.commands.list):
                 self.list(arg)
             elif utils.matches(command, self.commands.tag):
-                print(self.reference_entry_list)
-                # arg has to be a single string
-                if not arg:
-                    if self.cached_selection is not None:
-                        nums = self.cached_selection
-                    else:
-                        self.visual.error("Need an entry argument to tag.")
-                        continue
-                else:
-                    nums = utils.get_index_list(arg)
-                    if any([x is None for x in nums]) or not nums:
-                        self.visual.print("Need a valid entry index.")
-                        continue
+                nums = self.get_index_selection(arg)
+                if nums is None or not nums:
+                    self.visual.error("Need a selection to cite.")
+                    continue
                 for num in nums:
                     entry = self.entry_collection.entries[self.reference_entry_list[num - 1]]
                     updated_entry = self.get_editor().tag(entry)
@@ -316,20 +341,13 @@ class Runner:
                 self.editor.clear_cache()
             elif utils.matches(command, "open"):
                 # arg has to be a single string
-                if not arg:
-                    if self.cached_selection is not None:
-                        nums = self.cached_selection
-                    else:
-                        self.visual.error("Need an entry argument to open.")
-                        continue
-                else:
-                    nums = utils.get_index_list(arg)
-                    if any([x is None for x in nums]) or not nums:
-                        self.visual.print("Need a valid entry index.")
+                nums = self.get_index_selection(arg)
+                if utils.has_none(nums):
+                    self.visual.print("Need a valid entry index.")
                 for num in nums:
                     self.get_editor().open(self.entry_collection.entries[self.reference_entry_list[num - 1]])
             elif command[0].isdigit():
-                print(self.reference_entry_list)
+                # print(self.reference_entry_list)
                 # for numeric input, select these entries
                 self.select(user_input)
             else:
