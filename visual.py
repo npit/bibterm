@@ -95,7 +95,7 @@ class Io:
             # valid or no-option input
             return ans
 
-    def search(self, query, candidates, atmost, iterable_items=False):
+    def search(self, query, candidates, at_most, iterable_items=False):
         if iterable_items:
             # flatten
             nums = list(map(len, candidates))
@@ -117,8 +117,8 @@ class Io:
         # assign index
         results = [(results[i], i) for i in range(len(results)) if results[i][1] >= self.score_match_threshold]
         results = sorted(results, key=lambda x: x[0][1], reverse=True)
-        return results[:atmost]
-        # return process.extract(query, candidates, limit=atmost)
+        return results[:at_most]
+        # return process.extract(query, candidates, limit=at_most)
 
     def newline(self):
         self.print()
@@ -142,11 +142,29 @@ class Io:
     def enum(self, x_iter):
         return ["{} {}".format(self.num_str(i + 1, len(x_iter)), x_iter[i]) for i in range(len(x_iter))]
 
-    def print_enum(self, x_iter):
+    def print_enum(self, x_iter, at_most=None, additionals=None):
         if self.only_debug and not self.do_debug:
             return
-        for s in self.enum(x_iter):
-            self.print(s)
+        # check which items will be printed
+        if at_most and len(x_iter) > at_most:
+            idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]
+        else:
+            idxs_print = list(range(len(x_iter)))
+
+        printed_dots = False
+        for i, s in enumerate(self.enum(x_iter)):
+            if i in idxs_print:
+                if additionals:
+                    self.print(s + additionals[i])
+                else:
+                    self.print(s)
+            else:
+                if not printed_dots:
+                    self.print("...")
+                    printed_dots = True
+
+    def gen_entry_strings(self, entry, maxlens):
+        return (self.ID_str(entry.ID, maxlens[1]), self.title_str(entry.title, maxlens[2]), self.keyword_str(entry.keywords))
 
     def gen_entry_enum_strings(self, entry, maxlens, num, max_num=None):
         if max_num is None:
@@ -155,10 +173,10 @@ class Io:
                 self.title_str(entry.title, maxlens[2]), self.keyword_str(entry.keywords))
 
     # produce enumeration strings
-    def gen_entries_enum_strings(self, entries, maxlens):
+    def gen_entries_strings(self, entries, maxlens):
         enum_str_list = []
         for i, entry in enumerate(entries):
-            enum_str_list.append(self.gen_entry_enum_strings(entry, maxlens, i + 1))
+            enum_str_list.append(self.gen_entry_strings(entry, maxlens))
         return enum_str_list
 
     def debug(self, msg):
@@ -172,11 +190,6 @@ class Io:
             return
         if not x_iter:
             return
-        if at_most and len(x_iter) > at_most:
-            idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]
-        else:
-            idxs_print = list(range(len(x_iter)))
-
         if len(x_iter) != len(entry_collection.entries):
             # recompute max lengths
             maxlen_id = max([len(x.ID) for x in x_iter])
@@ -185,20 +198,10 @@ class Io:
         else:
             maxlens = entry_collection.maxlens()
 
-        strings = self.gen_entries_enum_strings(x_iter, maxlens)
-        print_dots = True
-
-        for i, tup in enumerate(strings):
-            if i in idxs_print:
-                print_str = "{} {} {} {}".format(*tup)
-                if additional_fields is not None:
-                    print_str += " {}".format(additional_fields[i])
-                self.print(print_str)
-
-            else:
-                if print_dots:
-                    self.print("...")
-                    print_dots = False
+        strings = ["{} {} {}".format(*tup) for tup in self.gen_entries_strings(x_iter, maxlens)]
+        if additional_fields:
+            strings = [s + f for (s, f) in zip(strings, additional_fields)]
+        self.print_enum(strings, at_most=at_most)
         if print_newline:
             self.newline()
 
@@ -222,8 +225,8 @@ class Blessings(Io):
     # def input(self, msg=""):
     #     return input(msg)
 
-    # def search(self, query, candidates, atmost):
-    #     return process.extract(query, candidates, limit=atmost)
+    # def search(self, query, candidates, at_most):
+    #     return process.extract(query, candidates, limit=at_most)
 
     # def newline(self):
     #     print()

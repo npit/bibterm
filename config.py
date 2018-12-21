@@ -30,16 +30,17 @@ def create_config():
     return conf
 
 
-def set_defaults(conf):
+def get_defaults(conf):
     # controls
     conf["controls"] = {"search": "/",
                         "list": "l",
                         "repeat": "r",
                         "quit": "q",
+                        "history_show": "h",
+                        "history_jump": "hj",
+                        "history_back": "hb",
+                        "history_forward": "hf",
                         "tag": "t"}
-
-    conf["list_controls"] = {"tag": "t",
-                             "open": "o"}
 
     conf["actions"] = ["get", "merge", "inspect"]
     conf["visual"] = "default"
@@ -64,7 +65,7 @@ def get_config():
             print("Creating configuration directory to {}".format(conf_dir))
             makedirs(dirname(conf_filepath))
 
-        conf = set_defaults(conf)
+        conf = get_defaults(conf)
         print("Writing configuration to {}".format(conf_filepath))
         with open(conf_filepath, "w") as f:
             json.dump(conf, f)

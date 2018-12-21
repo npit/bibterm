@@ -12,14 +12,21 @@ def matches(s, opts):
 
 def get_index_list(inp):
     idxs = []
+    if type(inp) == str:
+        inp = inp.strip().split()
+    for x in inp:
+        x = str_to_int(x)
+        if x is None:
+            return None
+        idxs.append(x)
+    return idxs
+
+
+def str_to_int(inp, default=None):
     try:
-        if type(inp) == str:
-            inp = inp.strip().split()
-        for x in inp:
-            idxs.append(int(x))
-        return idxs
+        return int(inp)
     except:
-        return None
+        return default
 
 
 def fix_file_path(path, pdf_dir=None):

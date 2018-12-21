@@ -11,14 +11,20 @@ from editor import Editor
 
 class Runner:
 
-    max_search = 10
+    max_search = None
+    max_list = None
 
     def __init__(self, conf, entry_collection=None):
-        # setup visual
+        # assignments
         self.conf = conf
         self.visual = setup(conf)
         self.editor = None
         self.cached_selection = None
+        self.has_stored_input = False
+
+        # maxes list
+        self.max_list = 30
+        self.max_search = 10
 
         # read the bib database
         if entry_collection is None:
@@ -28,21 +34,22 @@ class Runner:
         else:
             self.entry_collection = entry_collection
 
-        self.has_stored_input = False
 
         # map commands
         ctrl_keys = conf.controls.keys()
         self.commands = namedtuple("controls", ctrl_keys)(*[conf.controls[k] for k in ctrl_keys])
-        list_ctrl_keys = conf.list_controls.keys()
-        self.edit_commands = namedtuple("list_controls", list_ctrl_keys)(*[conf.list_controls[k] for k in list_ctrl_keys])
 
+        # search settings
         self.searchable_fields = ["ID", "title"]
         self.multivalue_keys = ["author", "keywords"]
         self.searchable_fields += self.multivalue_keys
 
+        # history
         # the entry collection on which commands are executed -- initialized as the whole collection
         self.reference_entry_list = self.entry_collection.id_list
-        self.reference_history = []
+        self.reference_history = [self.entry_collection.id_list]
+        self.command_history = [(len(self.entry_collection.id_list), "<start>")]
+        self.reference_history_index = 0
 
     def search(self, query=None):
         if query is None:
@@ -73,7 +80,7 @@ class Runner:
         results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
 
         self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
-        self.push_reference_list(results_ids)
+        self.push_reference_list(results_ids, command="{} {}".format(self.commands.search, query))
         # while self.select_from_results(results_ids):
         #     pass
 
@@ -122,12 +129,16 @@ class Runner:
         show_list = self.reference_entry_list
         if arg is not None and arg:
             if arg[0].isdigit():
+                at_most = int(arg)
+                if at_most >= len(self.reference_entry_list):
+                    self.visual.print("Reference is already {}-long.".format(len(self.reference_entry_list)))
+                    return
                 show_list = self.reference_entry_list[:int(arg)]
             else:
                 self.visual.error("Undefined list argument: {}".format(arg))
-        self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection)
+        self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.max_list)
         if len(show_list) < len(self.reference_entry_list):
-            self.push_reference_list(show_list)
+            self.push_reference_list(show_list, command="{} {}".format(self.commands.list, len(show_list)))
         # self.visual.newline()
         # while self.select_from_results(self.entry_collection.id_list):
         #     pass
@@ -179,37 +190,73 @@ class Runner:
             arg = parts[1]
         return cmd, arg
 
-    def step_back_history(self):
-        self.reference_entry_list = self.reference_history.pop()
-        self.visual.print("Switching back to {}-long reference list.".format(len(self.reference_entry_list)))
+    def jump_history(self, index):
+        if self.reference_history_index == index:
+            self.visual.print("Already here, m8.")
+            return
+        if index > 0 and index < len(self.reference_history):
+            self.step_history(-self.reference_history_index + index)
+
+
+    # move the reference list wrt stored history
+    def step_history(self, n_steps):
+        self.visual.debug("Stepping through a {}-long history, current index: {}, current length: {}, step is {}".format(len(self.reference_history), self.reference_history_index, len(self.reference_entry_list), n_steps))
+        if n_steps > 0:
+            if self.reference_history_index + n_steps > len(self.reference_history) - 1:
+                self.visual.error("History length: {} current index: {} attempted step stride: {}.".format(len(self.reference_history), self.reference_history_index, n_steps))
+                return
+            switch_msg = "forward"
+        else:
+            if self.reference_history_index + n_steps < 0:
+                self.visual.error("History length: {} current index: {} attempted step stride: {}.".format(len(self.reference_history), self.reference_history_index, n_steps))
+                return
+            switch_msg = "backwards"
+        self.reference_history_index += n_steps
+        self.reference_entry_list = self.reference_history[self.reference_history_index]
+        self.visual.print("Switched {} to {}-long reference list.".format(switch_msg, len(self.reference_entry_list)))
         self.list()
 
+    def show_history(self):
+        current_mark = ["" for _ in self.command_history]
+        current_mark[self.reference_history_index] = "*"
+        self.visual.print_enum(self.command_history, additionals=current_mark)
+        self.visual.debug("History length: {}, history lengths: {}, current index: {}, current length: {}.".format(len(self.reference_history),[len(x) for x in self.reference_history], self.reference_history_index, len(self.reference_entry_list)))
+
     # add to reference list history
-    def push_reference_list(self, new_list):
+    def push_reference_list(self, new_list, command):
+        # register the new reference
         if new_list == self.reference_entry_list:
             return
-        self.reference_history.append(self.reference_entry_list)
+        self.reference_history.append(new_list)
+        self.reference_history_index += 1
         self.reference_entry_list = new_list
         self.visual.print("Switching to new {}-long reference list.".format(len(self.reference_entry_list)))
+
+        # store the command that produced it
+        self.command_history.append((len(self.reference_entry_list), command))
+
+
+    def get_input(self, input_cmd):
+        if input_cmd is not None:
+            user_input = input_cmd
+            self.visual.debug("Got input from main: [{}]".format(input_cmd))
+            input_cmd = None
+        elif not self.has_stored_input:
+            self.visual.idle()
+            user_input = self.visual.input()
+        else:
+            user_input = self.get_stored_input()
+        return user_input, input_cmd
 
     def loop(self, input_cmd=None):
         previous_command = None
         while(True):
             # begin loop
-            if input_cmd is not None:
-                user_input = input_cmd
-                self.visual.debug("Got input from main: [{}]".format(input_cmd))
-                input_cmd = None
-            elif not self.has_stored_input:
-                self.visual.idle()
-                user_input = self.visual.input()
-            else:
-                user_input = self.get_stored_input()
+            user_input, input_cmd = self.get_input(input_cmd)
             if not user_input:
                 # self.visual.newline()
                 continue
 
-            print(user_input)
             # check for dual input
             command, arg = self.check_dual_input(user_input)
             self.visual.debug("Command: [{}] , arg: [{}]".format(command, arg))
@@ -224,7 +271,21 @@ class Runner:
             if command == self.commands.quit:
                 break
 
-            if command.startswith(self.commands.search):
+            if command == self.commands.history_back:
+                n_steps = utils.str_to_int(arg, default=-1)
+                self.step_history(n_steps)
+            elif command == self.commands.history_forward:
+                n_steps = utils.str_to_int(arg, default=1)
+                self.step_history(n_steps)
+            elif command == self.commands.history_jump:
+                idx = utils.str_to_int(arg)
+                if idx is None:
+                    self.visual.error("Need history index to jump to.")
+                    continue
+                self.jump_history(idx - 1)
+            elif command == self.commands.history_show:
+                self.show_history()
+            elif command.startswith(self.commands.search):
                 # concat to a single query
                 if command != self.commands.search:
                     query = str(command[len(self.commands.search):])
@@ -253,7 +314,6 @@ class Runner:
                     if self.editor.collection_modified and updated_entry is not None:
                         self.entry_collection.replace(updated_entry)
                 self.editor.clear_cache()
-
             elif utils.matches(command, "open"):
                 # arg has to be a single string
                 if not arg:
@@ -268,13 +328,11 @@ class Runner:
                         self.visual.print("Need a valid entry index.")
                 for num in nums:
                     self.get_editor().open(self.entry_collection.entries[self.reference_entry_list[num - 1]])
-                return True
             elif command[0].isdigit():
                 print(self.reference_entry_list)
                 # for numeric input, select these entries
                 self.select(user_input)
             else:
-                self.visual.error("Undefined command:", command)
-                self.visual.print("Available:", self.commands)
-                continue
+                self.visual.error("Undefined command: {}".format(command))
+                self.visual.print("Available: {}".format(self.commands))
             previous_command = command
