@@ -19,6 +19,7 @@ class EntryCollection:
     do_fix = None
     fixes = 0
     entries_fixed = 0
+    modified_collection = False
 
     def get_tag_information(self):
         return {"keep": list(self.keyword2id.keys()), "map": self.keywords_map}
@@ -48,13 +49,7 @@ class EntryCollection:
 
         for i in range(len(bib_db.entries)):
             self.entry_index = i
-            # print("All ids:", ",".join())
             entry = bib_db.entries[i]
-            # print("Got entry to insert: ", entry["ID"], " bib etnries", len(bib_db.entries))
-            # print("bib dict entries:", len(bib_db.entries_dict))
-            # print("entries:", len(self.entries))
-            # print("id list:", len(self.id_list))
-            # print("title list:", len(self.title_list))
             ent = Entry(entry)
             self.insert(ent)
 
@@ -94,7 +89,6 @@ class EntryCollection:
         del self.title2id[title]
 
     def replace(self, ent):
-        breakpoint()
         # keep copies of id and title lists to preserve order
         id_idx = self.id_list.index(ent.ID.lower())
         title_idx = self.title_list.index(ent.title.lower())
@@ -109,6 +103,7 @@ class EntryCollection:
         # restore to list position
         self.id_list.insert(id_idx, ent.ID.lower())
         self.title_list.insert(title_idx, ent.title.lower())
+        self.modified_collection = True
 
     def correct_id(self, current_id, expected_id):
         # id
@@ -308,6 +303,7 @@ class EntryCollection:
         if ent.ID not in self.bibtex_db.entries_dict:
             # self.visual.warn("Non existing ID on bibtex dict: {}, adding.".format(ent.ID))
             self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
+        self.modified_collection = True
 
     def insert(self, ent, can_fix=True):
         if can_fix:
@@ -401,10 +397,12 @@ class Entry:
     def set_file(self, file_path):
         self.raw_dict["file"] = file_path
         self.file = file_path
+        self.modified_collection = True
 
     def set_keywords(self, kw):
         self.raw_dict["keywords"] = kw
         self.keywords = kw
+        self.modified_collection = True
 
     def get_pretty_dict(self):
         d = OrderedDict()

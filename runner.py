@@ -1,5 +1,6 @@
 from collections import namedtuple
 from reader import Reader
+from getter import Getter
 from visual import setup
 import utils
 from editor import Editor
@@ -111,9 +112,7 @@ class Runner:
             return None
 
     def modified_collection(self):
-        if self.editor is None:
-            return False
-        return self.editor.collection_modified
+        return self.entry_collection.modified_collection
 
     def select(self, inp):
             # no command offered: it's a number, select from results (0-addressable)
@@ -320,11 +319,13 @@ class Runner:
                     if self.editor.collection_modified and updated_entry is not None:
                         self.entry_collection.replace(updated_entry)
             elif command.startswith(self.commands.search):
+                query = arg if arg else ""
                 # concat to a single query
                 if command != self.commands.search:
-                    query = str(command[len(self.commands.search):])
-                    if arg:
-                        query += " " + arg
+                    query = str(command[len(self.commands.search):]) + query
+                if not query:
+                    self.visual.error("Search what?")
+                    continue
                 self.search(query.lower().strip())
             elif utils.matches(command, self.commands.list):
                 self.list(arg)
@@ -346,6 +347,20 @@ class Runner:
                     self.visual.print("Need a valid entry index.")
                 for num in nums:
                     self.get_editor().open(self.entry_collection.entries[self.reference_entry_list[num - 1]])
+            elif utils.matches(command, "get"):
+                getter = Getter(self.conf)
+                res = getter.get(arg)
+                reader2 = Reader(self.conf)
+                reader2.read_string(res)
+                self.visual.print("Got entry item(s):")
+                for entry in reader2.get_entry_collection().entries.values():
+                    self.visual.print_entry_contents(entry)
+                what = self.visual.input("Store?", "*yes no")
+                if utils.matches(what, "no"):
+                    continue
+                for entry in reader2.get_entry_collection().entries.values():
+                    self.entry_collection.create(entry)
+
             elif command[0].isdigit():
                 # print(self.reference_entry_list)
                 # for numeric input, select these entries
