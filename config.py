@@ -37,12 +37,13 @@ def get_defaults(conf):
                         "repeat": "r",
                         "quit": "q",
                         "history_show": "h",
+                        "history_reset": "hr",
                         "history_jump": "hj",
                         "history_back": "hb",
                         "history_forward": "hf",
                         "tag": "t"}
 
-    conf["actions"] = ["get", "merge", "inspect"]
+    conf["actions"] = ["merge", "inspect"]
     conf["visual"] = "default"
     conf["pdf_dir"] = join(dirname(conf.bib_path), "pdfs")
     return conf

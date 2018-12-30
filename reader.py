@@ -174,7 +174,7 @@ class EntryCollection:
             what = self.visual.input("Process keywords for entry [{}] ".format(index_id), "*keep discard change #1 #2 #... #|  #*all", check=False)
             try:
                 cmd, *idx_args = what.strip().split()
-                idx_list = [i-1 for i in utils.get_index_list(idx_args)]
+                idx_list = [i - 1 for i in utils.get_index_list(idx_args)]
                 if not idx_list:
                     idx_list = range(len(keywords))
                 elif utils.matches(cmd, 'all'):
@@ -484,6 +484,8 @@ class Reader:
 
     # Read from string
     def read_string(self, string):
+        if len(string) == 0 or string is None:
+            return
         parser = BibTexParser()
         parser.customization = Reader.customizations
         db = bibtexparser.loads(string, parser=parser)

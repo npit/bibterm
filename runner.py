@@ -36,7 +36,6 @@ class Runner:
         else:
             self.entry_collection = entry_collection
 
-
         # map commands
         ctrl_keys = conf.controls.keys()
         self.commands = namedtuple("controls", ctrl_keys)(*[conf.controls[k] for k in ctrl_keys])
@@ -47,11 +46,7 @@ class Runner:
         self.searchable_fields += self.multivalue_keys
 
         # history
-        # the entry collection on which commands are executed -- initialized as the whole collection
-        self.reference_entry_list = self.entry_collection.id_list
-        self.reference_history = [self.entry_collection.id_list]
-        self.command_history = [(len(self.entry_collection.id_list), "<start>")]
-        self.reference_history_index = 0
+        self.reset_history()
 
     def search(self, query=None):
         if query is None:
@@ -199,6 +194,12 @@ class Runner:
         else:
             self.visual.error("Need an index in [1, {}]".format(len(self.reference_history)))
 
+    def reset_history(self):
+        # the entry collection on which commands are executed -- initialized as the whole collection
+        self.reference_entry_list = self.entry_collection.id_list
+        self.reference_history = [self.entry_collection.id_list]
+        self.command_history = [(len(self.entry_collection.id_list), "<start>")]
+        self.reference_history_index = 0
 
     # move the reference list wrt stored history
     def step_history(self, n_steps):
@@ -222,7 +223,7 @@ class Runner:
         current_mark = ["" for _ in self.command_history]
         current_mark[self.reference_history_index] = "*"
         self.visual.print_enum(self.command_history, additionals=current_mark)
-        self.visual.debug("History length: {}, history lengths: {}, current index: {}, current length: {}.".format(len(self.reference_history),[len(x) for x in self.reference_history], self.reference_history_index, len(self.reference_entry_list)))
+        self.visual.debug("History length: {}, history lengths: {}, current index: {}, current length: {}.".format(len(self.reference_history), [len(x) for x in self.reference_history], self.reference_history_index, len(self.reference_entry_list)))
 
     # add to reference list history
     def push_reference_list(self, new_list, command):
@@ -236,7 +237,6 @@ class Runner:
 
         # store the command that produced it
         self.command_history.append((len(self.reference_entry_list), command))
-
 
     def get_input(self, input_cmd):
         if input_cmd is not None:
@@ -261,6 +261,7 @@ class Runner:
             if utils.has_none(nums):
                 # non numeric input
                 return None
+            self.cached_selection = nums
             return nums
 
     def loop(self, input_cmd=None):
@@ -282,10 +283,8 @@ class Runner:
                     self.visual.print("This is the first command.")
                     continue
                 command = previous_command
-
             if command == self.commands.quit:
                 break
-
             if command == self.commands.history_back:
                 n_steps = utils.str_to_int(arg, default=-1)
                 self.step_history(n_steps)
@@ -298,6 +297,9 @@ class Runner:
                     self.visual.error("Need history index to jump to.")
                     continue
                 self.jump_history(idx - 1)
+            elif command == self.commands.history_reset:
+                self.visual.print("Resetting history.")
+                self.reset_history()
             elif command == self.commands.history_show:
                 self.show_history()
             elif utils.matches(command, self.commands.cite):
@@ -305,16 +307,19 @@ class Runner:
                 if nums is None or not nums:
                     self.visual.error("Need a selection to cite.")
                     continue
-                citation = "\\cite{{{}}}".format(", ".join([self.reference_entry_list[n-1] for n in nums]))
+                citation_id = ", ".join([self.reference_entry_list[n - 1] for n in nums])
+                citation = "\\cite{{{}}}".format(citation_id)
+                clipboard.copy(citation_id)
                 clipboard.copy(citation)
-                self.visual.print("Copied to clipboard: {}".format(citation))
+                self.visual.print("Copied to clipboard: {} and then {}".format(citation_id,
+                                                                               citation))
             elif command.startswith(self.commands.pdf_file):
                 nums = self.get_index_selection(arg)
                 if nums is None or not nums:
-                    self.visual.error("Need a selection to cite.")
+                    self.visual.error("Need a selection to add pdf to.")
                     continue
                 for n in nums:
-                    entry = self.entry_collection.entries[self.reference_entry_list[n-1]]
+                    entry = self.entry_collection.entries[self.reference_entry_list[n - 1]]
                     updated_entry = self.get_editor().set_file(entry)
                     if self.editor.collection_modified and updated_entry is not None:
                         self.entry_collection.replace(updated_entry)
@@ -346,10 +351,25 @@ class Runner:
                 if utils.has_none(nums):
                     self.visual.print("Need a valid entry index.")
                 for num in nums:
-                    self.get_editor().open(self.entry_collection.entries[self.reference_entry_list[num - 1]])
+                    entry = self.entry_collection.entries[self.reference_entry_list[num - 1]]
+                    res = self.get_editor().open(entry)
+                    if res is None and len(nums) == 1:
+                        # copy title to clipboard to help search for the pdf online
+                        self.visual.print("Copied title to clipboard: {}".format(entry.title))
+                        clipboard.copy(entry.title)
             elif utils.matches(command, "get"):
                 getter = Getter(self.conf)
-                res = getter.get(arg)
+                if not arg:
+                    self.visual.error("Need a query to get entry from the internet.")
+                    continue
+                try:
+                    res = getter.get(arg)
+                except:
+                    self.visual.error("Failed to complete the query.")
+                    continue
+                if not res:
+                    self.visual.error("No data retrieved.")
+                    continue
                 reader2 = Reader(self.conf)
                 reader2.read_string(res)
                 self.visual.print("Got entry item(s):")

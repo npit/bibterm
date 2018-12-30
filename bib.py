@@ -1,13 +1,10 @@
 from runner import Runner
-import utils
 from reader import Reader
 from writer import BibWriter
-from getter import Getter
 from config import get_config, get_conf_filepath
 import argparse
 from collections import namedtuple
 import visual
-import clipboard
 
 
 def to_namedtuple(conf_dict):
@@ -21,17 +18,7 @@ def merge(conf, vis, args, string_data=None):
     reader = Reader(conf)
     reader.read()
     reader2 = Reader(conf)
-    if not args:
-        if string_data is None:
-            vis.print("No file argument specified, merging from clipboard.")
-            string_data = clipboard.paste()
-        reader2.read_string(string_data)
-        if len(reader2.get_entry_collection().entries) == 1:
-            # copy citation key for single-item copies, for your pleasure
-            copying_single_string = True
-            citation_key = next(iter(reader2.get_entry_collection().entries.values())).get_citation()
-    else:
-        reader2.read(args[0])
+    reader2.read(args[0])
 
     if len(reader2.get_entry_collection().entries) == 0:
         vis.print("Zero items extracted from the collection to merge, exiting.")
@@ -47,11 +34,6 @@ def merge(conf, vis, args, string_data=None):
         runner = Runner(conf, entry_collection=merged_collection)
         runner.loop()
         writer.write_confirm(merged_collection)
-    else:
-        vis.print("Writing updated library.")
-        writer.write(merged_collection)
-        clipboard.copy(citation_key)
-        vis.print("Copied citation key to clipboard: {}".format(citation_key))
 
 
 def main():
@@ -78,16 +60,6 @@ def main():
         if cmd == "merge":
             merge(conf, vis, parser_args)
             return
-        elif cmd == "get":
-            if not args:
-                print("Need an argument for command {}".format(cmd))
-                return
-            getter = Getter(conf)
-            res = getter.get(" ".join(args))
-            # from here, merge from copied string
-            merge(conf, vis, None, string_data=res)
-            return
-
         elif cmd == "inspect":
             if not args:
                 print("Need an argument for command {}".format(cmd))
