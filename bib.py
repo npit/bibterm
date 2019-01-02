@@ -5,6 +5,7 @@ from config import get_config, get_conf_filepath
 import argparse
 from collections import namedtuple
 import visual
+import clipboard
 
 
 def to_namedtuple(conf_dict):
@@ -13,18 +14,25 @@ def to_namedtuple(conf_dict):
     return conf
 
 
-def merge(conf, vis, args, string_data=None):
+def merge(conf, vis, merge_args, string_data=None):
     copying_single_string = False
     reader = Reader(conf)
     reader.read()
     reader2 = Reader(conf)
-    reader2.read(args[0])
 
+    breakpoint()
+    if merge_args:
+        vis.print("Merging from argument: {}.".format(merge_args))
+        reader2.read(merge_args[0])
+    else:
+        vis.print("Merging copied content.")
+        reader2.read_string(clipboard.paste())
     if len(reader2.get_entry_collection().entries) == 0:
         vis.print("Zero items extracted from the collection to merge, exiting.")
         return
     writer = BibWriter(conf)
     merged_collection = writer.merge(reader.get_entry_collection(), reader2.get_entry_collection())
+    copying_single_string = len(reader2.get_entry_collection().entries) == 1
     if merged_collection is None:
         return
     # inspect, if merging a large one
@@ -34,6 +42,12 @@ def merge(conf, vis, args, string_data=None):
         runner = Runner(conf, entry_collection=merged_collection)
         runner.loop()
         writer.write_confirm(merged_collection)
+    else:
+        citation_key = next(iter(reader2.get_entry_collection().entries.values())).get_citation()
+        vis.print("Writing updated library.")
+        writer.write(merged_collection)
+        clipboard.copy(citation_key)
+        vis.print("Copied citation key to clipboard: {}".format(citation_key))
 
 
 def main():
@@ -58,7 +72,8 @@ def main():
         cmd, *args = parser_args.actions
 
         if cmd == "merge":
-            merge(conf, vis, parser_args)
+            breakpoint()
+            merge(conf, vis, args)
             return
         elif cmd == "inspect":
             if not args:

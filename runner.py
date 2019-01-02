@@ -285,6 +285,7 @@ class Runner:
                 command = previous_command
             if command == self.commands.quit:
                 break
+            # history
             if command == self.commands.history_back:
                 n_steps = utils.str_to_int(arg, default=-1)
                 self.step_history(n_steps)
@@ -302,6 +303,7 @@ class Runner:
                 self.reset_history()
             elif command == self.commands.history_show:
                 self.show_history()
+            # latex citing
             elif utils.matches(command, self.commands.cite):
                 nums = self.get_index_selection(arg)
                 if nums is None or not nums:
@@ -313,6 +315,7 @@ class Runner:
                 clipboard.copy(citation)
                 self.visual.print("Copied to clipboard: {} and then {}".format(citation_id,
                                                                                citation))
+            # adding paths to pdfs
             elif command.startswith(self.commands.pdf_file):
                 nums = self.get_index_selection(arg)
                 if nums is None or not nums:
@@ -323,6 +326,7 @@ class Runner:
                     updated_entry = self.get_editor().set_file(entry)
                     if self.editor.collection_modified and updated_entry is not None:
                         self.entry_collection.replace(updated_entry)
+            # searching
             elif command.startswith(self.commands.search):
                 query = arg if arg else ""
                 # concat to a single query
@@ -332,8 +336,10 @@ class Runner:
                     self.visual.error("Search what?")
                     continue
                 self.search(query.lower().strip())
+            # listing
             elif utils.matches(command, self.commands.list):
                 self.list(arg)
+            # adding tags
             elif utils.matches(command, self.commands.tag):
                 nums = self.get_index_selection(arg)
                 if nums is None or not nums:
@@ -345,6 +351,7 @@ class Runner:
                     if self.editor.collection_modified and updated_entry is not None:
                         self.entry_collection.replace(updated_entry)
                 self.editor.clear_cache()
+            # opening pdfs
             elif utils.matches(command, "open"):
                 # arg has to be a single string
                 nums = self.get_index_selection(arg)
@@ -357,6 +364,7 @@ class Runner:
                         # copy title to clipboard to help search for the pdf online
                         self.visual.print("Copied title to clipboard: {}".format(entry.title))
                         clipboard.copy(entry.title)
+            # fetching from google scholar
             elif utils.matches(command, "get"):
                 getter = Getter(self.conf)
                 if not arg:
