@@ -359,8 +359,8 @@ class Runner:
                     self.visual.print("Need a valid entry index.")
                 for num in nums:
                     entry = self.entry_collection.entries[self.reference_entry_list[num - 1]]
-                    res = self.get_editor().open(entry)
-                    if res is None and len(nums) == 1:
+                    pdf_in_entry = self.get_editor().open(entry)
+                    if not pdf_in_entry and len(nums) == 1:
                         # copy title to clipboard to help search for the pdf online
                         self.visual.print("Copied title to clipboard: {}".format(entry.title))
                         clipboard.copy(entry.title)

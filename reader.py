@@ -20,6 +20,7 @@ class EntryCollection:
     fixes = 0
     entries_fixed = 0
     modified_collection = False
+    keyword_override_action = None
 
     def get_tag_information(self):
         return {"keep": list(self.keyword2id.keys()), "map": self.keywords_map}
@@ -171,36 +172,46 @@ class EntryCollection:
 
         while keywords:
             self.visual.print_enum(keywords)
-            what = self.visual.input("Process keywords for entry [{}] ".format(index_id), "*keep discard change #1 #2 #... #|  #*all", check=False)
-            try:
+            if self.keyword_override_action is None:
+                what = self.visual.input("Process keywords for entry [{}] ".format(index_id),
+                                            "Keep-all Discard-all *keep discard change #1 #2 #... #|  #*all ", check=False)
                 cmd, *idx_args = what.strip().split()
                 idx_list = [i - 1 for i in utils.get_index_list(idx_args)]
                 if not idx_list:
                     idx_list = range(len(keywords))
                 elif utils.matches(cmd, 'all'):
                     idx_list = range(len(keywords))
+            else:
+                self.visual.print("Applying action to all entries & keywords: {}".format(self.keyword_override_action))
+                cmd, idx_list = self.keyword_override_action, range(len(keywords))
 
-                if utils.matches(cmd, "keep"):
-                    applied_changes = True
-                    for i in idx_list:
-                        self.add_keyword_instance(keywords[i], index_id)
-                        keywords_final.append(keywords[i])
-                elif utils.matches(cmd, "change"):
-                    applied_changes = True
-                    new_kws = self.visual.input("Change keywords: {} to what?".format([keywords[i] for i in idx_list]))
-                    new_kws = new_kws.strip().split()
-                    for i in idx_list:
-                        self.change_keyword(keywords[i], new_kws, index_id)
-                    keywords_final.extend(new_kws)
-                elif utils.matches(cmd, "discard"):
-                    applied_changes = True
-                else:
-                    self.visual.print("Invalid input.")
-                    continue
-                # remove used up indexes
-                keywords = [keywords[i] for i in range(len(keywords)) if i not in idx_list]
-            except:
-                self.visual.print("Something went wrong, check your input.")
+            if utils.matches(cmd, "keep"):
+                applied_changes = True
+                for i in idx_list:
+                    self.add_keyword_instance(keywords[i], index_id)
+                    keywords_final.append(keywords[i])
+            elif utils.matches(cmd, "change"):
+                applied_changes = True
+                new_kws = self.visual.input("Change keywords: {} to what?".format([keywords[i] for i in idx_list]))
+                new_kws = new_kws.strip().split()
+                for i in idx_list:
+                    self.change_keyword(keywords[i], new_kws, index_id)
+                keywords_final.extend(new_kws)
+            elif utils.matches(cmd, "discard"):
+                applied_changes = True
+            elif utils.matches(cmd, "Keep-all"):
+                # apply the action
+                self.keyword_override_action = "keep"
+                continue
+            elif utils.matches(cmd, "Discard-all"):
+                # apply the action
+                self.keyword_override_action = "discard"
+                continue
+            else:
+                self.visual.print("Invalid input.")
+                continue
+            # remove used up indexes
+            keywords = [keywords[i] for i in range(len(keywords)) if i not in idx_list]
 
         # assign to the entry object
         ent.keywords = list(set(keywords_final))
