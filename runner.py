@@ -286,7 +286,7 @@ class Runner:
             if command == self.commands.quit:
                 if self.modified_collection():
                     what = self.visual.input("Collection has been modifled. Overwrite?", "*yes no")
-                    if utils.matches("yes"):
+                    if utils.matches(what, "yes"):
                         self.entry_collection.overwrite_file(self.conf)
                 break
             # history
@@ -396,9 +396,11 @@ class Runner:
             # save collection
             elif utils.matches(command, "save"):
                 if not self.modified_collection():
-                    what = self.visual.input("Sure? Collection hasn't been modifled.", "*yes no")
-                    if utils.matches("yes"):
-                        self.entry_collection.overwrite_file(self.conf)
+                    what = self.visual.input("Sure? Collection hasn't been modifled.", "yes *no")
+                    if not utils.matches("yes"):
+                        continue
+                self.entry_collection.overwrite_file(self.conf)
+                self.entry_collection.reset_modified()
             elif command[0].isdigit():
                 # print(self.reference_entry_list)
                 # for numeric input, select these entries

@@ -364,6 +364,9 @@ class EntryCollection:
         value = joiner.join(value)
         return re.sub("[{}]", "", value)
 
+    def reset_modified(self):
+        self.modified_collection = False
+
     # overwrite collection to the file specified by the configuration
     def overwrite_file(self, conf):
         writer = Writer(conf)
