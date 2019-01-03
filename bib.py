@@ -1,6 +1,6 @@
 from runner import Runner
 from reader import Reader
-from writer import BibWriter
+from writer import Writer
 from config import get_config, get_conf_filepath
 import argparse
 from collections import namedtuple
@@ -20,7 +20,6 @@ def merge(conf, vis, merge_args, string_data=None):
     reader.read()
     reader2 = Reader(conf)
 
-    breakpoint()
     if merge_args:
         vis.print("Merging from argument: {}.".format(merge_args))
         reader2.read(merge_args[0])
@@ -30,7 +29,7 @@ def merge(conf, vis, merge_args, string_data=None):
     if len(reader2.get_entry_collection().entries) == 0:
         vis.print("Zero items extracted from the collection to merge, exiting.")
         return
-    writer = BibWriter(conf)
+    writer = Writer(conf)
     merged_collection = writer.merge(reader.get_entry_collection(), reader2.get_entry_collection())
     copying_single_string = len(reader2.get_entry_collection().entries) == 1
     if merged_collection is None:
@@ -72,7 +71,6 @@ def main():
         cmd, *args = parser_args.actions
 
         if cmd == "merge":
-            breakpoint()
             merge(conf, vis, args)
             return
         elif cmd == "inspect":
@@ -97,11 +95,6 @@ def main():
     if runner is None:
         runner = Runner(conf)
     runner.loop(input_cmd=input_cmd)
-    if runner.modified_collection():
-        vis.print("Collection modified.")
-        writer = BibWriter(conf)
-        writer.write_confirm(runner.entry_collection)
-
 
 if __name__ == '__main__':
     main()

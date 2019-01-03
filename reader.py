@@ -11,7 +11,7 @@ import re
 from visual import setup
 import collections
 
-from writer import BibWriter
+from writer import Writer
 
 
 class EntryCollection:
@@ -174,7 +174,7 @@ class EntryCollection:
             self.visual.print_enum(keywords)
             if self.keyword_override_action is None:
                 what = self.visual.input("Process keywords for entry [{}] ".format(index_id),
-                                            "Keep-all Discard-all *keep discard change #1 #2 #... #|  #*all ", check=False)
+                                         "Keep-all Discard-all *keep discard change #1 #2 #... #|  #*all ", check=False)
                 cmd, *idx_args = what.strip().split()
                 idx_list = [i - 1 for i in utils.get_index_list(idx_args)]
                 if not idx_list:
@@ -215,6 +215,8 @@ class EntryCollection:
 
         # assign to the entry object
         ent.keywords = list(set(keywords_final))
+        if applied_changes:
+            self.fixes += 1
         return ent, applied_changes
 
     def fix_entry(self, ent):
@@ -361,6 +363,11 @@ class EntryCollection:
         joiner = " and " if key == "author" else ", "
         value = joiner.join(value)
         return re.sub("[{}]", "", value)
+
+    # overwrite collection to the file specified by the configuration
+    def overwrite_file(self, conf):
+        writer = Writer(conf)
+        writer.write(self)
 
 
 class Entry:
@@ -526,7 +533,7 @@ class Reader:
             what = self.visual.input("Write updated tags to the original file: {}?".format(self.tags_path), "yes *no")
             if utils.matches(what, "yes"):
                 with open(self.tags_path, "w") as f:
-                    json.dump(json.dumps(updated_tags, indent=4, sort_keys=True), f)
+                    f.write(json.dumps(updated_tags, indent=4, sort_keys=True))
 
         if self.entry_collection.entries_fixed > 0:
             self.visual.print("Applied a total of {} fixes to {} entries.".format(self.entry_collection.fixes, self.entry_collection.entries_fixed))
@@ -534,8 +541,7 @@ class Reader:
             if utils.matches(what, "no"):
                 pass
             else:
-                writer = BibWriter(self.conf, entry_collection=self.entry_collection)
-                writer.write(self.entry_collection)
+                self.entry_collection.overwrite_file(self.conf)
 
     def get_entry_collection(self):
         return self.entry_collection

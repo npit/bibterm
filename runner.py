@@ -284,6 +284,10 @@ class Runner:
                     continue
                 command = previous_command
             if command == self.commands.quit:
+                if self.modified_collection():
+                    what = self.visual.input("Collection has been modifled. Overwrite?", "*yes no")
+                    if utils.matches("yes"):
+                        self.entry_collection.overwrite_file(self.conf)
                 break
             # history
             if command == self.commands.history_back:
@@ -311,10 +315,11 @@ class Runner:
                     continue
                 citation_id = ", ".join([self.reference_entry_list[n - 1] for n in nums])
                 citation = "\\cite{{{}}}".format(citation_id)
-                clipboard.copy(citation_id)
+                # clipboard.copy(citation_id)
                 clipboard.copy(citation)
-                self.visual.print("Copied to clipboard: {} and then {}".format(citation_id,
-                                                                               citation))
+                self.visual.print("Copied to clipboard: {}".format(citation))
+                # self.visual.print("Copied to clipboard: {} and then {}".format(citation_id,
+                #                                                               citation))
             # adding paths to pdfs
             elif command.startswith(self.commands.pdf_file):
                 nums = self.get_index_selection(arg)
@@ -388,7 +393,12 @@ class Runner:
                     continue
                 for entry in reader2.get_entry_collection().entries.values():
                     self.entry_collection.create(entry)
-
+            # save collection
+            elif utils.matches(command, "save"):
+                if not self.modified_collection():
+                    what = self.visual.input("Sure? Collection hasn't been modifled.", "*yes no")
+                    if utils.matches("yes"):
+                        self.entry_collection.overwrite_file(self.conf)
             elif command[0].isdigit():
                 # print(self.reference_entry_list)
                 # for numeric input, select these entries

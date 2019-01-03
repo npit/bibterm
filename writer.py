@@ -1,15 +1,13 @@
-import clipboard
 import utils
-from os.path import exists
 from visual import setup
 import bibtexparser
 
 
-class BibWriter:
+class Writer:
 
     bib_path = None
 
-    def __init__(self, conf, entry_collection=None):
+    def __init__(self, conf):
         """
         Adds copied bibtex entry to bibtex file
         """
