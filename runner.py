@@ -334,12 +334,10 @@ class Runner:
             # searching
             elif command.startswith(self.commands.search):
                 query = arg if arg else ""
-                # concat to a single query
-                if command != self.commands.search:
+                if command == self.commands.search:
+                    query = self.visual.input_multichar("Enter search term(s)")
+                else:
                     query = str(command[len(self.commands.search):]) + query
-                if not query:
-                    self.visual.error("Search what?")
-                    continue
                 self.search(query.lower().strip())
             # listing
             elif utils.matches(command, self.commands.list):
@@ -401,6 +399,8 @@ class Runner:
                         continue
                 self.entry_collection.overwrite_file(self.conf)
                 self.entry_collection.reset_modified()
+            elif command == self.commands.clear:
+                self.visual.clear()
             elif command[0].isdigit():
                 # print(self.reference_entry_list)
                 # for numeric input, select these entries

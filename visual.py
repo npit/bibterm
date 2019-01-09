@@ -1,29 +1,29 @@
 import json
 import utils
-from fuzzywuzzy import process
+from blessed import Terminal
 from fuzzywuzzy import fuzz
 
 
 # base class to get and print stuff
 def setup(conf):
-    try:
-        if conf.visual == "default":
-            return Io.get_instance(conf=conf)
+        if conf.visual == Io.name:
+            return Io.get_instance(conf)
+        elif conf.visual == Blessed.name:
+            return Blessed.get_instance(conf)
         else:
             print("Undefined IO config:", conf.io)
             exit(1)
-    except:
-        print("Failed to read visual configuration.")
-        exit(1)
 
 
 class Io:
+    name = "default"
 
     only_debug = False
     do_debug = False
     default_option_mark = "*"
     score_match_threshold = 50
     instance = None
+    clear_size = 100
 
     def set_only_debug(self, val):
         self.only_debug = val
@@ -32,9 +32,18 @@ class Io:
         self.do_debug = conf.debug
 
     def get_instance(conf=None):
-        if conf is not None:
-            Io.instance = Io(conf)
+        if Io.instance is not None:
+            return Io.instance
+        if conf is None:
+            print("Need configuration to instantiate visual")
+            exit(1)
+        print("Instantiating the {} ui".format(Blessed.name))
+        Io.instance = Io(conf)
         return Io.instance
+
+    def clear(self):
+        for _ in range(self.clear_size):
+            self.newline()
 
     def idle(self):
         print("Give command: ", end="")
@@ -53,6 +62,14 @@ class Io:
 
     def error(self, msg):
         self.print("Error: " + msg)
+
+    def get_user_input(self, msg=None):
+        if msg is None:
+            return input()
+        return input(msg)
+
+    def input_multichar(self, msg):
+        return self.input(msg)
 
     # func to show choices. Bang options are explicit and are not edited
     def input(self, msg="", options_str=None, check=True):
@@ -80,7 +97,7 @@ class Io:
             msg += ": "
 
         while True:
-            ans = input(msg)
+            ans = self.get_user_input(msg)
             if options_str:
                 # default option on empty input
                 if not ans and default_idx is not None:
@@ -214,16 +231,102 @@ class Io:
 
 
 # blessings ncurses for humans
-class Blessings(Io):
-    pass
-    # def idle(self):
-    #     print("Give command.")
+class Blessed(Io):
+    name = "blessed"
+    term = None
+    instance = None
+    cursor_loc = None
 
-    # def print(self, msg):
-    #     print(msg)
+    def __init__(self, conf):
+        self.term = Terminal()
+        self.width = self.term.width
+        self.height = self.term.height
+        self.clear()
+        self.find_cursor()
 
-    # def input(self, msg=""):
-    #     return input(msg)
+    def find_cursor(self):
+        # locations
+        self.y, self.x = self.term.get_location()
+
+    def get_cursor(self):
+        # locations
+        return self.term.get_location()
+
+    def get_instance(conf=None):
+        if Blessed.instance is not None:
+            return Blessed.instance
+        if conf is None:
+            utils.error("Need configuration to instantiate visual")
+        print("Instantiating the {} ui".format(Blessed.name))
+        Blessed.instance = Blessed(conf)
+        return Blessed.instance
+
+    def print(self, msg, temp=False):
+        if self.only_debug and not self.do_debug:
+            return
+        print(self.term.normal, msg)
+        if not temp:
+            # update position
+            self.find_cursor()
+
+    def clear(self):
+        print(self.term.clear())
+
+    def get_user_input(self, msg=None):
+        if msg is not None:
+            self.print(msg)
+        with self.term.cbreak():
+            return self.term.inkey()
+
+    def input_multichar(self, msg=None):
+        if msg is not None:
+            with self.term.location(x=self.x, y=self.y):
+                self.temp_print(msg + ":")
+        inp = ""
+        while True:
+            with self.term.cbreak():
+                # c = self.term.inkey()
+                c = self.get_user_input()
+                if c.is_sequence:
+                    # print("got sequence: {0}.".format((str(c), c.name, c.code)))
+                    if c.name == "KEY_DELETE":
+                        inp = inp[:-1]
+                else:
+                    inp += c
+
+                if c == "":
+                    break
+
+                with self.term.location(x=30):
+                    print(self.get_cursor())
+                with self.term.location(x=self.x):
+                    self.term.clear_eol()
+                    self.term.clear_bol()
+                    self.temp_print(inp)
+        return inp
+
+    def idle(self):
+        with self.term.location(x=0, y=self.y):
+            self.temp_print(">")
+        with self.term.location(x=self.term.width - 3, y=self.y):
+            self.temp_print(":)")
+        with self.term.location(x=0, y=self.term.height - 1):
+            self.temp_print("loc:{}".format((self.x, self.y)))
+        self.set_cursor(6, self.y)
+
+    def set_cursor(self, x=None, y=None):
+        if x is not None:
+            self.x = x
+        if y is not None:
+            self.y = y
+        self.update_cursor()
+
+    def update_cursor(self):
+        self.term.move(self.x, self.y)
+
+    def temp_print(self, msg):
+        self.print(msg, temp=True)
+
 
     # def search(self, query, candidates, at_most):
     #     return process.extract(query, candidates, limit=at_most)
