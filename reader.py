@@ -88,6 +88,7 @@ class EntryCollection:
         self.id_list.remove(ID)
         self.title_list.remove(title)
         del self.title2id[title]
+        self.modified_collection = True
 
     def replace(self, ent):
         # keep copies of id and title lists to preserve order

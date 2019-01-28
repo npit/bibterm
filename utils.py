@@ -1,4 +1,6 @@
 import os
+from collections import namedtuple
+
 
 # check if s equals or is the start of opts or any of its elements
 def matches(s, opts):
@@ -8,6 +10,12 @@ def matches(s, opts):
                 return True
         return False
     return s == opts or opts.startswith(s)
+
+
+def to_namedtuple(conf_dict, ntname):
+    keys = sorted(conf_dict.keys())
+    conf = namedtuple(ntname, keys)(*[conf_dict[k] for k in keys])
+    return conf
 
 
 def get_index_list(inp):

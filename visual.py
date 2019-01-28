@@ -6,13 +6,13 @@ from fuzzywuzzy import fuzz
 
 # base class to get and print stuff
 def setup(conf):
-        if conf.visual == Io.name:
-            return Io.get_instance(conf)
-        elif conf.visual == Blessed.name:
-            return Blessed.get_instance(conf)
-        else:
-            print("Undefined IO config:", conf.io)
-            exit(1)
+    if conf.visual == Io.name:
+        return Io.get_instance(conf)
+    elif conf.visual == Blessed.name:
+        return Blessed.get_instance(conf)
+    else:
+        print("Undefined IO config:", conf.io)
+        exit(1)
 
 
 class Io:
@@ -37,7 +37,7 @@ class Io:
         if conf is None:
             print("Need configuration to instantiate visual")
             exit(1)
-        print("Instantiating the {} ui".format(Blessed.name))
+        print("Instantiating the {} ui".format(Io.name))
         Io.instance = Io(conf)
         return Io.instance
 
@@ -61,7 +61,7 @@ class Io:
         exit(1)
 
     def error(self, msg):
-        self.print("Error: " + msg)
+        self.print("Error: {}".format(msg))
 
     def get_user_input(self, msg=None):
         if msg is None:
@@ -94,7 +94,8 @@ class Io:
             opt_print = " ".join(opt_print + explicit_opts)
             msg += " " + opt_print + ": "
         else:
-            msg += ": "
+            if msg:
+                msg += ": "
 
         while True:
             ans = self.get_user_input(msg)
@@ -230,17 +231,43 @@ class Io:
         self.print("---------------")
 
 
-# blessings ncurses for humans
 class Blessed(Io):
     name = "blessed"
     term = None
     instance = None
     cursor_loc = None
 
+    class states:
+        command = "command"
+    curren_state = None
+
+    class positions:
+        lower_left = None
+        upper_left = None
+
+    class layout:
+        command = None
+
+    def initialize_layout(self):
+        # initialize positions
+        self.positions.lower_left = 0, self.height
+        self.positions.upper_left = 0, 0
+        self.positions.lower_right = self.width, self.height
+        self.positions.upper_right = self.width, 0
+
+        try:
+            layout = json.load(self.conf.layout)
+            self.layout = utils.to_namedtuple(layout, 'layout')
+        except:
+            self.layout.command = self.positions.upper_left
+        self.curren_state = self.states.command
+
     def __init__(self, conf):
+        self.conf = conf
         self.term = Terminal()
         self.width = self.term.width
         self.height = self.term.height
+        self.initialize_layout()
         self.clear()
         self.find_cursor()
 
@@ -261,10 +288,16 @@ class Blessed(Io):
         Blessed.instance = Blessed(conf)
         return Blessed.instance
 
-    def print(self, msg, temp=False):
+    def print(self, msg, temp=False, no_newline=False):
         if self.only_debug and not self.do_debug:
             return
-        print(self.term.normal, msg)
+        if no_newline:
+            # temp-print and move cursor to the end of the message
+            with self.term.location(self.x, self.y):
+                print(msg)
+            self.set_cursor(x=len(msg))
+        else:
+            print(self.term.normal, msg)
         if not temp:
             # update position
             self.find_cursor()
@@ -278,41 +311,47 @@ class Blessed(Io):
         with self.term.cbreak():
             return self.term.inkey()
 
+    def get_position_by_state(self):
+        if self.curren_state == self.states.command:
+            return self.layout.command
+
     def input_multichar(self, msg=None):
         if msg is not None:
-            with self.term.location(x=self.x, y=self.y):
-                self.temp_print(msg + ":")
+            self.temp_print(msg)
+            self.x = len(msg) + 3
+            self.set_cursor()
+
+        sx, sy = self.get_cursor()
+
         inp = ""
+        # set search prompt
+        self.set_prompt("/")
         while True:
             with self.term.cbreak():
                 # c = self.term.inkey()
                 c = self.get_user_input()
                 if c.is_sequence:
-                    # print("got sequence: {0}.".format((str(c), c.name, c.code)))
+                    self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
                     if c.name == "KEY_DELETE":
                         inp = inp[:-1]
+                    if c.name == "KEY_ENTER":
+                        break
                 else:
                     inp += c
 
-                if c == "":
-                    break
-
-                with self.term.location(x=30):
-                    print(self.get_cursor())
-                with self.term.location(x=self.x):
-                    self.term.clear_eol()
-                    self.term.clear_bol()
-                    self.temp_print(inp)
+                self.temp_print(inp, clear_to_eol=True)
+                self.temp_print("printed" + str(self.get_cursor()), x=30)
+                self.temp_print(inp, x=30, y=self.y + 4)
         return inp
 
+    def set_prompt(self, prompt):
+        self.temp_print(prompt)
+
     def idle(self):
-        with self.term.location(x=0, y=self.y):
-            self.temp_print(">")
-        with self.term.location(x=self.term.width - 3, y=self.y):
-            self.temp_print(":)")
-        with self.term.location(x=0, y=self.term.height - 1):
-            self.temp_print("loc:{}".format((self.x, self.y)))
-        self.set_cursor(6, self.y)
+        self.temp_print(">", x=0)
+        self.temp_print(":)", x=self.term.width - 3, y=self.y)
+        self.temp_print("loc:{}".format((self.x, self.y)), y=self.term.height - 1)
+        self.set_cursor(1, self.y)
 
     def set_cursor(self, x=None, y=None):
         if x is not None:
@@ -324,12 +363,20 @@ class Blessed(Io):
     def update_cursor(self):
         self.term.move(self.x, self.y)
 
-    def temp_print(self, msg):
-        self.print(msg, temp=True)
+    def temp_print(self, msg, x=None, y=None, clear_to_eol=False):
+        if x is None:
+            x = self.x
+        if y is None:
+            y = self.y
+        # clear the line to its end
+        with self.term.location(x, y):
+            if clear_to_eol:
+                print(self.term.clear_eol())
+            self.print(msg, temp=True)
 
+    # def newline(self):
+    #     print()
 
     # def search(self, query, candidates, at_most):
     #     return process.extract(query, candidates, limit=at_most)
 
-    # def newline(self):
-    #     print()

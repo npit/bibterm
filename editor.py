@@ -27,9 +27,9 @@ class Editor:
             return self.get_raw_input(msg)
 
         # check hard Yes / No
-        if self.do_apply_cache == True:
+        if self.do_apply_cache:
             return self.cache
-        if self.do_apply_cache == False:
+        if not self.do_apply_cache:
             return self.get_raw_input(msg)
 
         # no hard setting exists, ask
@@ -49,13 +49,14 @@ class Editor:
         if utils.matches(what, "no"):
             return self.get_raw_input(msg)
 
-    def set_file(self, entry):
+    def set_file(self, entry, file_path=None):
         self.visual.print("Inserting pdf file to [{}]".format(entry.ID))
         if entry.file is not None:
-            what = self.get_input("Entry already has a file path {}. Replace?".format(entry.file), "*yes no")
+            what = self.visual.input("Entry already has a file path {}. Replace?".format(entry.file), "*yes no")
             if utils.matches(what, "no"):
                 return None
-        file_path = self.get_input("File path")
+        if file_path is None:
+            file_path = self.get_input("File path")
         entry.set_file(file_path)
         self.collection_modified = True
         return entry

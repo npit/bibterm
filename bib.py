@@ -3,15 +3,9 @@ from reader import Reader
 from writer import Writer
 from config import get_config, get_conf_filepath
 import argparse
-from collections import namedtuple
 import visual
 import clipboard
-
-
-def to_namedtuple(conf_dict):
-    keys = sorted(conf_dict.keys())
-    conf = namedtuple("conf", keys)(*[conf_dict[k] for k in keys])
-    return conf
+from utils import to_namedtuple
 
 
 def merge(conf, vis, merge_args, string_data=None):
@@ -63,7 +57,7 @@ def main():
     parser_args = parser.parse_args()
 
     conf_dict["debug"] = parser_args.debug
-    conf = to_namedtuple(conf_dict)
+    conf = to_namedtuple(conf_dict, "conf")
     vis = visual.setup(conf)
     runner, input_cmd = None, None
 

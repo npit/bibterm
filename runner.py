@@ -264,6 +264,16 @@ class Runner:
             self.cached_selection = nums
             return nums
 
+    def save_if_modified(self, force=False):
+        if not self.modified_collection():
+            if not force:
+                return
+            what = self.visual.input("Sure? Collection hasn't been modifled.", "yes *no")
+            if not utils.matches("yes"):
+                return
+        self.entry_collection.overwrite_file(self.conf)
+        self.entry_collection.reset_modified()
+
     def loop(self, input_cmd=None):
         previous_command = None
         while(True):
@@ -307,6 +317,13 @@ class Runner:
                 self.reset_history()
             elif command == self.commands.history_show:
                 self.show_history()
+            elif command == self.commands.delete:
+                nums = self.get_index_selection(arg)
+                if nums is None or not nums:
+                    self.visual.error("Need a selection to delete.")
+                    continue
+                for entry_id in [self.reference_entry_list[n - 1] for n in nums]:
+                    self.entry_collection.remove(entry_id)
             # latex citing
             elif utils.matches(command, self.commands.cite):
                 nums = self.get_index_selection(arg)
@@ -323,19 +340,35 @@ class Runner:
             # adding paths to pdfs
             elif command.startswith(self.commands.pdf_file):
                 nums = self.get_index_selection(arg)
-                if nums is None or not nums:
-                    self.visual.error("Need a selection to add pdf to.")
+                if nums is None or not nums or len(nums) > 1:
+                    self.visual.error("Need a single selection to download pdf to.")
                     continue
-                for n in nums:
-                    entry = self.entry_collection.entries[self.reference_entry_list[n - 1]]
-                    updated_entry = self.get_editor().set_file(entry)
-                    if self.editor.collection_modified and updated_entry is not None:
-                        self.entry_collection.replace(updated_entry)
+                entry = self.entry_collection.entries[self.reference_entry_list[nums[0] - 1]]
+                updated_entry = self.get_editor().set_file(entry)
+                if self.editor.collection_modified and updated_entry is not None:
+                    self.entry_collection.replace(updated_entry)
+            # fetching pdfs from the web
+            elif command == self.commands.pdf_web:
+                nums = self.get_index_selection(arg)
+                if nums is None or not nums or len(nums) > 1:
+                    self.visual.error("Need a single selection to download pdf to.")
+                    continue
+                entry_id = self.reference_entry_list[nums[0] - 1]
+                entry = self.entry_collection.entries[entry_id]
+                getter = Getter(self.conf)
+                pdf_url = self.visual.input("Give pdf url to download")
+                file_path = getter.get_web_pdf(pdf_url, entry_id)
+                if file_path is None:
+                    self.visual.error("Failed to download from {}.".format(pdf_url))
+                    continue
+                updated_entry = self.get_editor().set_file(entry, file_path=file_path)
+                self.entry_collection.replace(updated_entry)
             # searching
             elif command.startswith(self.commands.search):
                 query = arg if arg else ""
                 if command == self.commands.search:
-                    query = self.visual.input_multichar("Enter search term(s)")
+                    # search_prompt = "Enter search term(s):"
+                    query = self.visual.input_multichar()
                 else:
                     query = str(command[len(self.commands.search):]) + query
                 self.search(query.lower().strip())
@@ -374,7 +407,7 @@ class Runner:
                     self.visual.error("Need a query to get entry from the internet.")
                     continue
                 try:
-                    res = getter.get(arg)
+                    res = getter.get_gscholar(arg)
                 except:
                     self.visual.error("Failed to complete the query.")
                     continue
@@ -393,12 +426,8 @@ class Runner:
                     self.entry_collection.create(entry)
             # save collection
             elif utils.matches(command, "save"):
-                if not self.modified_collection():
-                    what = self.visual.input("Sure? Collection hasn't been modifled.", "yes *no")
-                    if not utils.matches("yes"):
-                        continue
-                self.entry_collection.overwrite_file(self.conf)
-                self.entry_collection.reset_modified()
+                self.save_if_modified()
+                continue
             elif command == self.commands.clear:
                 self.visual.clear()
             elif command[0].isdigit():
@@ -409,3 +438,5 @@ class Runner:
                 self.visual.error("Undefined command: {}".format(command))
                 self.visual.print("Available: {}".format(self.commands))
             previous_command = command
+        # end of loop
+        self.save_if_modified()
