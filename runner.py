@@ -366,7 +366,7 @@ class Runner:
             # searching
             elif command.startswith(self.commands.search):
                 query = arg if arg else ""
-                if command == self.commands.search:
+                if command == self.commands.search and not arg:
                     # search_prompt = "Enter search term(s):"
                     query = self.visual.input_multichar()
                 else:
