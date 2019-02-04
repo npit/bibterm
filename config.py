@@ -36,6 +36,11 @@ def get_defaults(conf):
                         "list": "l",
                         "repeat": "r",
                         "quit": "q",
+                        "cite": "c",
+                        "pdf_file": "fp",
+                        "save": "s",
+                        "pdf_open": "o",
+                        "pdf_web": "fw",
                         "history_show": "h",
                         "history_reset": "hr",
                         "history_jump": "hj",
@@ -45,7 +50,7 @@ def get_defaults(conf):
 
     conf["actions"] = ["merge", "inspect"]
     conf["visual"] = "default"
-    conf["pdf_dir"] = join(dirname(conf.bib_path), "pdfs")
+    conf["pdf_dir"] = join(dirname(conf["bib_path"]), "pdfs")
     return conf
 
 
