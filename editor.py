@@ -57,6 +57,9 @@ class Editor:
                 return None
         if file_path is None:
             file_path = self.get_input("File path")
+        if not file_path:
+            self.visual.debug("Ignoring empty file path.")
+            return None
         entry.set_file(file_path)
         self.collection_modified = True
         return entry
