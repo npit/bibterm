@@ -71,6 +71,11 @@ class Io:
     def input_multichar(self, msg):
         return self.input(msg)
 
+    def yes_no(self, msg, default_yes=True):
+        opts = "*yes no" if default_yes else "yes *no"
+        what = self.input(msg, opts)
+        return utils.matches(what, "yes")
+
     # func to show choices. Bang options are explicit and are not edited
     def input(self, msg="", options_str=None, check=True):
         default_idx = None

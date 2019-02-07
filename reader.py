@@ -327,7 +327,7 @@ class EntryCollection:
         # update object lookup dict
         if ID in self.entries:
             self.visual.print("Entry with id {} already in entries dict!".format(ID))
-            exit(1)
+            return
         self.entries[ID] = ent
         # update title-id mapping
         self.title2id[title] = ID

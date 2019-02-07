@@ -83,10 +83,10 @@ class Runner:
 
     # print entry, only fields of interest
     def inspect_entry(self, ones_idx):
-        if not isinstance(ones_idx, int) or ones_idx > len(self.reference_entry_list) or ones_idx < 1:
-            self.visual.print("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(self.reference_entry_list)))
+        if not isinstance(ones_idx, int) or ones_idx > len(self.reference_entry_id_list) or ones_idx < 1:
+            self.visual.print("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(self.reference_entry_id_list)))
             return
-        ID = self.reference_entry_list[ones_idx - 1]
+        ID = self.reference_entry_id_list[ones_idx - 1]
         self.visual.print_entry_contents(self.entry_collection.entries[ID])
 
     # singleton editor fetcher
@@ -110,29 +110,29 @@ class Runner:
         return self.entry_collection.modified_collection
 
     def select(self, inp):
-            # no command offered: it's a number, select from results (0-addressable)
-            nums = utils.get_index_list(inp)
-            for num in nums:
-                self.inspect_entry(num)
-            self.cached_selection = nums
+        # no command offered: it's a number, select from results (0-addressable)
+        nums = utils.get_index_list(inp)
+        for num in nums:
+            self.inspect_entry(num)
+        self.cached_selection = nums
 
     def get_stored_input(self):
         self.has_stored_input = False
         return self.stored_input
 
     def list(self, arg=None):
-        show_list = self.reference_entry_list
+        show_list = self.reference_entry_id_list
         if arg is not None and arg:
             if arg[0].isdigit():
                 at_most = int(arg)
-                if at_most >= len(self.reference_entry_list):
-                    self.visual.print("Reference is already {}-long.".format(len(self.reference_entry_list)))
+                if at_most >= len(self.reference_entry_id_list):
+                    self.visual.print("Reference is already {}-long.".format(len(self.reference_entry_id_list)))
                     return
-                show_list = self.reference_entry_list[:int(arg)]
+                show_list = self.reference_entry_id_list[:int(arg)]
             else:
                 self.visual.error("Undefined list argument: {}".format(arg))
         self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.max_list)
-        if len(show_list) < len(self.reference_entry_list):
+        if len(show_list) < len(self.reference_entry_id_list):
             self.push_reference_list(show_list, command="{} {}".format(self.commands.list, len(show_list)))
         # self.visual.newline()
         # while self.select_from_results(self.entry_collection.id_list):
@@ -151,7 +151,7 @@ class Runner:
         candidate_values = []
         searched_entry_ids = []
         # get candidate values, as key to a value: entry_id dict
-        for x in self.reference_entry_list:
+        for x in self.reference_entry_id_list:
             entry = self.entry_collection.entries[x]
             value = getattr(entry, filter_key)
             if type(value) == str:
@@ -196,14 +196,14 @@ class Runner:
 
     def reset_history(self):
         # the entry collection on which commands are executed -- initialized as the whole collection
-        self.reference_entry_list = self.entry_collection.id_list
+        self.reference_entry_id_list = self.entry_collection.id_list
         self.reference_history = [self.entry_collection.id_list]
         self.command_history = [(len(self.entry_collection.id_list), "<start>")]
         self.reference_history_index = 0
 
     # move the reference list wrt stored history
     def step_history(self, n_steps):
-        self.visual.debug("Stepping through a {}-long history, current index: {}, current length: {}, step is {}".format(len(self.reference_history), self.reference_history_index, len(self.reference_entry_list), n_steps))
+        self.visual.debug("Stepping through a {}-long history, current index: {}, current length: {}, step is {}".format(len(self.reference_history), self.reference_history_index, len(self.reference_entry_id_list), n_steps))
         if n_steps > 0:
             if self.reference_history_index + n_steps > len(self.reference_history) - 1:
                 self.visual.error("History length: {} current index: {} attempted step stride: {}.".format(len(self.reference_history), self.reference_history_index, n_steps))
@@ -215,28 +215,28 @@ class Runner:
                 return
             switch_msg = "backwards"
         self.reference_history_index += n_steps
-        self.reference_entry_list = self.reference_history[self.reference_history_index]
-        self.visual.print("Switched {} to {}-long reference list.".format(switch_msg, len(self.reference_entry_list)))
+        self.reference_entry_id_list = self.reference_history[self.reference_history_index]
+        self.visual.print("Switched {} to {}-long reference list.".format(switch_msg, len(self.reference_entry_id_list)))
         self.list()
 
     def show_history(self):
         current_mark = ["" for _ in self.command_history]
         current_mark[self.reference_history_index] = "*"
         self.visual.print_enum(self.command_history, additionals=current_mark)
-        self.visual.debug("History length: {}, history lengths: {}, current index: {}, current length: {}.".format(len(self.reference_history), [len(x) for x in self.reference_history], self.reference_history_index, len(self.reference_entry_list)))
+        self.visual.debug("History length: {}, history lengths: {}, current index: {}, current length: {}.".format(len(self.reference_history), [len(x) for x in self.reference_history], self.reference_history_index, len(self.reference_entry_id_list)))
 
     # add to reference list history
     def push_reference_list(self, new_list, command):
         # register the new reference
-        if new_list == self.reference_entry_list:
+        if new_list == self.reference_entry_id_list:
             return
         self.reference_history.append(new_list)
         self.reference_history_index += 1
-        self.reference_entry_list = new_list
-        self.visual.print("Switching to new {}-long reference list.".format(len(self.reference_entry_list)))
+        self.reference_entry_id_list = new_list
+        self.visual.print("Switching to new {}-long reference list.".format(len(self.reference_entry_id_list)))
 
         # store the command that produced it
-        self.command_history.append((len(self.reference_entry_list), command))
+        self.command_history.append((len(self.reference_entry_id_list), command))
 
     def get_input(self, input_cmd):
         if input_cmd is not None:
@@ -264,13 +264,15 @@ class Runner:
             self.cached_selection = nums
             return nums
 
-    def save_if_modified(self, force=False):
-        if not self.modified_collection():
-            if not force:
+    def save_if_modified(self, verify_write=True, called_explicitely=False):
+        # for auto-calls, do not print anything if the collection was not modified
+        if not called_explicitely and not self.modified_collection():
+            return
+        modified_status = "*has been modified*" if self.modified_collection() else "has not been modified"
+        if verify_write:
+            if not self.visual.yes_no("The collection {}. Overwrite?".format(modified_status), default_yes=False):
                 return
-            what = self.visual.input("Sure? Collection hasn't been modifled.", "yes *no")
-            if not utils.matches("yes"):
-                return
+        # write
         self.entry_collection.overwrite_file(self.conf)
         self.entry_collection.reset_modified()
 
@@ -294,10 +296,6 @@ class Runner:
                     continue
                 command = previous_command
             if command == self.commands.quit:
-                if self.modified_collection():
-                    what = self.visual.input("Collection has been modifled. Overwrite?", "*yes no")
-                    if utils.matches(what, "yes"):
-                        self.entry_collection.overwrite_file(self.conf)
                 break
             # history
             if command == self.commands.history_back:
@@ -322,7 +320,7 @@ class Runner:
                 if nums is None or not nums:
                     self.visual.error("Need a selection to delete.")
                     continue
-                for entry_id in [self.reference_entry_list[n - 1] for n in nums]:
+                for entry_id in [self.reference_entry_id_list[n - 1] for n in nums]:
                     self.entry_collection.remove(entry_id)
             # latex citing
             elif utils.matches(command, self.commands.cite):
@@ -330,7 +328,7 @@ class Runner:
                 if nums is None or not nums:
                     self.visual.error("Need a selection to cite.")
                     continue
-                citation_id = ", ".join([self.reference_entry_list[n - 1] for n in nums])
+                citation_id = ", ".join([self.reference_entry_id_list[n - 1] for n in nums])
                 citation = "\\cite{{{}}}".format(citation_id)
                 # clipboard.copy(citation_id)
                 clipboard.copy(citation)
@@ -343,7 +341,7 @@ class Runner:
                 if nums is None or not nums or len(nums) > 1:
                     self.visual.error("Need a single selection to download pdf to.")
                     continue
-                entry = self.entry_collection.entries[self.reference_entry_list[nums[0] - 1]]
+                entry = self.entry_collection.entries[self.reference_entry_id_list[nums[0] - 1]]
                 updated_entry = self.get_editor().set_file(entry)
                 if self.editor.collection_modified and updated_entry is not None:
                     self.entry_collection.replace(updated_entry)
@@ -353,7 +351,7 @@ class Runner:
                 if nums is None or not nums or len(nums) > 1:
                     self.visual.error("Need a single selection to download pdf to.")
                     continue
-                entry_id = self.reference_entry_list[nums[0] - 1]
+                entry_id = self.reference_entry_id_list[nums[0] - 1]
                 entry = self.entry_collection.entries[entry_id]
                 getter = Getter(self.conf)
                 pdf_url = self.visual.input("Give pdf url to download")
@@ -382,7 +380,7 @@ class Runner:
                     self.visual.error("Need a selection to cite.")
                     continue
                 for num in nums:
-                    entry = self.entry_collection.entries[self.reference_entry_list[num - 1]]
+                    entry = self.entry_collection.entries[self.reference_entry_id_list[num - 1]]
                     updated_entry = self.get_editor().tag(entry)
                     if self.editor.collection_modified and updated_entry is not None:
                         self.entry_collection.replace(updated_entry)
@@ -394,7 +392,7 @@ class Runner:
                 if utils.has_none(nums):
                     self.visual.print("Need a valid entry index.")
                 for num in nums:
-                    entry = self.entry_collection.entries[self.reference_entry_list[num - 1]]
+                    entry = self.entry_collection.entries[self.reference_entry_id_list[num - 1]]
                     pdf_in_entry = self.get_editor().open(entry)
                     if not pdf_in_entry and len(nums) == 1:
                         # copy title to clipboard to help search for the pdf online
@@ -416,22 +414,27 @@ class Runner:
                     continue
                 reader2 = Reader(self.conf)
                 reader2.read_string(res)
+                read_entries_dict = reader2.get_entry_collection().entries
                 self.visual.print("Got entry item(s):")
-                for entry in reader2.get_entry_collection().entries.values():
+                for entry in read_entries_dict.values():
                     self.visual.print_entry_contents(entry)
-                what = self.visual.input("Store?", "*yes no")
-                if utils.matches(what, "no"):
+                if not self.visual.yes_no("Store?"):
                     continue
-                for entry in reader2.get_entry_collection().entries.values():
+                for entry in read_entries_dict.values():
                     self.entry_collection.create(entry)
+                if not self.visual.yes_no("Select it?"):
+                    continue
+                self.reset_history()
+                self.cached_selection = [i+1 for i in range(len(self.reference_entry_id_list)) if self.reference_entry_id_list[i] in read_entries_dict]
+                self.visual.print("Item is now selected: {}.".format(self.cached_selection))
             # save collection
-            elif utils.matches(command, "save"):
-                self.save_if_modified()
+            elif utils.matches(command, self.commands.save):
+                self.save_if_modified(explicitely_called=True)
                 continue
             elif command == self.commands.clear:
                 self.visual.clear()
             elif command[0].isdigit():
-                # print(self.reference_entry_list)
+                # print(self.reference_entry_id_list)
                 # for numeric input, select these entries
                 self.select(user_input)
             else:

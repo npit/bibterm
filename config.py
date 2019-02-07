@@ -41,6 +41,7 @@ def get_defaults(conf):
                         "history_jump": "hj",
                         "history_back": "hb",
                         "history_forward": "hf",
+                        "save": "s",
                         "tag": "t"}
 
     conf["actions"] = ["merge", "inspect"]
