@@ -177,7 +177,7 @@ class EntryCollection:
                 what = self.visual.input("Process keywords for entry [{}] ".format(index_id),
                                          "Keep-all Discard-all *keep discard change #1 #2 #... #|  #*all ", check=False)
                 cmd, *idx_args = what.strip().split()
-                idx_list = [i - 1 for i in utils.get_index_list(idx_args)]
+                idx_list = [i - 1 for i in utils.get_index_list(idx_args, len(keywords))]
                 if not idx_list:
                     idx_list = range(len(keywords))
                 elif utils.matches(cmd, 'all'):

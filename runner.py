@@ -87,6 +87,7 @@ class Runner:
             self.visual.print("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(self.reference_entry_id_list)))
             return
         ID = self.reference_entry_id_list[ones_idx - 1]
+        self.visual.print("Entry #[{}]".format(ones_idx))
         self.visual.print_entry_contents(self.entry_collection.entries[ID])
 
     # singleton editor fetcher
@@ -111,7 +112,10 @@ class Runner:
 
     def select(self, inp):
         # no command offered: it's a number, select from results (0-addressable)
-        nums = utils.get_index_list(inp)
+        nums = utils.get_index_list(inp, len(self.reference_entry_id_list))
+        if nums is None:
+            self.visual.print("Invalid selection: {}".format(inp))
+            return
         for num in nums:
             self.inspect_entry(num)
         self.cached_selection = nums
@@ -177,6 +181,8 @@ class Runner:
 
     # checks wether command and arguments are inserted at once
     def check_dual_input(self, command):
+        if not command:
+            return "", None
         parts = command.split(maxsplit=1)
         cmd = parts[0]
         if len(parts) == 1:
@@ -257,7 +263,7 @@ class Runner:
             # no input provided
             return []
         else:
-            nums = utils.get_index_list(inp)
+            nums = utils.get_index_list(inp, len(self.reference_entry_id_list))
             if utils.has_none(nums):
                 # non numeric input
                 return None
@@ -281,9 +287,9 @@ class Runner:
         while(True):
             # begin loop
             user_input, input_cmd = self.get_input(input_cmd)
-            if not user_input:
-                # self.visual.newline()
-                continue
+            # if not user_input:
+            #     # self.visual.newline()
+            #     continue
 
             # check for dual input
             command, arg = self.check_dual_input(user_input)
@@ -386,7 +392,9 @@ class Runner:
                         self.entry_collection.replace(updated_entry)
                 self.editor.clear_cache()
             # opening pdfs
-            elif utils.matches(command, "open"):
+            elif utils.matches(command, self.commands.pdf_open):
+                if not arg:
+                    self.visual.print("Need a selection to open.")
                 # arg has to be a single string
                 nums = self.get_index_selection(arg)
                 if utils.has_none(nums):
@@ -425,15 +433,17 @@ class Runner:
                 if not self.visual.yes_no("Select it?"):
                     continue
                 self.reset_history()
-                self.cached_selection = [i+1 for i in range(len(self.reference_entry_id_list)) if self.reference_entry_id_list[i] in read_entries_dict]
+                self.cached_selection = [i + 1 for i in range(len(self.reference_entry_id_list)) if self.reference_entry_id_list[i] in read_entries_dict]
                 self.visual.print("Item is now selected: {}.".format(self.cached_selection))
             # save collection
             elif utils.matches(command, self.commands.save):
-                self.save_if_modified(explicitely_called=True)
+                self.save_if_modified(called_explicitely=True)
                 continue
             elif command == self.commands.clear:
                 self.visual.clear()
-            elif command[0].isdigit():
+            elif command == self.commands.show:
+                self.select(self.cached_selection)
+            elif utils.is_index_list(command):
                 # print(self.reference_entry_id_list)
                 # for numeric input, select these entries
                 self.select(user_input)

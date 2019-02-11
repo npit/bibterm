@@ -1,4 +1,4 @@
-import os
+import re
 from collections import namedtuple
 
 
@@ -9,7 +9,7 @@ def matches(s, opts):
             if matches(s, c):
                 return True
         return False
-    return s == opts or opts.startswith(s)
+    return s and (s == opts or opts.startswith(s))
 
 
 def to_namedtuple(conf_dict, ntname):
@@ -18,8 +18,46 @@ def to_namedtuple(conf_dict, ntname):
     return conf
 
 
-def get_index_list(inp):
+def is_index_list(inp):
+    """Determine if the input has only slicable numeric list elements
+    """
+    return all([x in [" ", ":"] or x.isdigit()  for x in inp])
+
+
+def get_index_list(inp, total_index_num, allow_slicing=True):
+    """Convert a string slicable numeric list to list of integers
+    """
+
     idxs = []
+    # allow pythonic slicing
+    if allow_slicing and ":" in inp:
+        # make sure it's whitespace surrounded
+        inp = inp.replace(":", " : ")
+        inp = inp.strip().split()
+        res = []
+        # errors
+        consequtive_colons = any([inp[i] == inp[i + 1] == ":" for i in range(len(inp) - 1)])
+        if len(inp) == 1 or consequtive_colons:
+            return None
+        for i, x in enumerate(inp):
+            if x == ":":
+                if i == 0:
+                    prev_element = 1
+                    next_element = int(inp[i + 1])
+                elif i == len(inp) - 1:
+                    prev_element = int(inp[i - 1])
+                    next_element = total_index_num
+                else:
+                    prev_element = int(inp[i - 1])
+                    next_element = int(inp[i + 1])
+
+                if next_element > total_index_num:
+                    next_element = total_index_num
+
+                # beginning of sequence
+                res.extend(map(str, range(prev_element, next_element + 1)))
+        inp = res
+
     if type(inp) == str:
         inp = inp.strip().split()
     for x in inp:

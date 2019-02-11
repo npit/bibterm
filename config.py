@@ -32,17 +32,26 @@ def create_config():
 
 def get_defaults(conf):
     # controls
-    conf["controls"] = {"search": "/",
-                        "list": "l",
-                        "repeat": "r",
-                        "quit": "q",
-                        "history_show": "h",
-                        "history_reset": "hr",
-                        "history_jump": "hj",
-                        "history_back": "hb",
-                        "history_forward": "hf",
-                        "save": "s",
-                        "tag": "t"}
+    conf["controls"] = {
+        "search": "/",
+        "list": "l",
+        "clear": "",
+        "delete": "del",
+        "repeat": "r",
+        "show": "sh",
+        "quit": "q",
+        "save": "s",
+        "cite": "c",
+        "pdf_file": "fp",
+        "pdf_web": "fw",
+        "pdf_open": "o",
+        "history_show": "h",
+        "history_reset": "hr",
+        "history_jump": "hj",
+        "history_back": "hb",
+        "history_forward": "hf",
+        "tag": "t"
+    }
 
     conf["actions"] = ["merge", "inspect"]
     conf["visual"] = "default"
