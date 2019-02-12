@@ -26,6 +26,16 @@ def is_index_list(inp):
     return all([x in [" ", ":"] or x.isdigit() for x in inp])
 
 
+def is_valid_index_list(inp):
+    if not is_index_list(inp):
+        return False
+    if ":" in inp:
+        consequtive_colons = any([inp[i] == inp[i + 1] == ":" for i in range(len(inp) - 1)])
+        if len(inp) == 1 or consequtive_colons:
+            return False
+    return True
+
+
 def get_index_list(inp, total_index_num, allow_slicing=True):
     """Convert a string slicable numeric list to list of integers
     """
@@ -37,9 +47,7 @@ def get_index_list(inp, total_index_num, allow_slicing=True):
         inp = inp.replace(":", " : ")
         inp = inp.strip().split()
         res = []
-        # errors
-        consequtive_colons = any([inp[i] == inp[i + 1] == ":" for i in range(len(inp) - 1)])
-        if len(inp) == 1 or consequtive_colons:
+        if not is_valid_index_list(inp):
             return None
         for i, x in enumerate(inp):
             if x == ":":

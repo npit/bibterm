@@ -246,6 +246,12 @@ class Io:
         self.print(json.dumps(entry.get_pretty_dict(), indent=2))
         self.print("---------------")
 
+    def print_entries_contents(self, entries):
+        if self.only_debug and not self.do_debug:
+            return
+        for entry in entries:
+            self.print_entry_contents(entry)
+
 
 class Blessed(Io):
     name = "blessed"
@@ -253,7 +259,9 @@ class Blessed(Io):
     instance = None
     cursor_loc = None
     search_cache = ""
+    selection_cache = ""
     does_incremental_search = True
+    message_buffer_size = None
 
     class states:
         command = "command"
@@ -268,6 +276,7 @@ class Blessed(Io):
         command = None
         log = None
         message = None
+        large_message = None
 
     def initialize_layout(self):
         # initialize positions
@@ -283,6 +292,11 @@ class Blessed(Io):
             self.layout.command = self.positions.lower_left
             self.layout.log = self.positions.upper_left
             self.layout.message = (self.width // 3, self.height)
+            self.layout.large_message = (2 * self.width // 3, 1)
+
+            self.command_buffer_size = self.layout.message[0] - 1
+            self.message_buffer_size = self.width - self.layout.message[0]
+
         self.curren_state = self.states.command
 
     def __init__(self, conf):
@@ -295,7 +309,6 @@ class Blessed(Io):
         self.data_start_line = 1
         self.data_end_line = self.height - 1
         self.search_cache = ""
-        # self.find_cursor()
 
     def find_cursor(self):
         # locations
@@ -339,10 +352,12 @@ class Blessed(Io):
         if self.curren_state == self.states.command:
             return self.layout.command
 
+
     def receive_search(self):
         done = False
-        self.update_prompt_symbol("/")
-        self.clear_prompt()
+        if not self.search_cache:
+            self.clear_prompt()
+            self.update_prompt_symbol("/")
         x, y = self.layout.command
         starting_x = 2
         x += starting_x
@@ -379,40 +394,85 @@ class Blessed(Io):
         return done, self.search_cache
 
     def receive_command(self):
-        inp = ""
         x, y = self.layout.command
         starting_x = 2
         x += starting_x
         done = False
+        info_msg = ""
 
+        inp = self.selection_cache
         while not done:
             with self.term.cbreak():
                 # get_character
-                # sys.stderr.write("{} {} ".format(x, y))
                 c = self.get_single_char_input()
                 if c.is_sequence:
-                    # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
                     if c.name == "KEY_DELETE":
                         self.clear_line(y, starting_x)
                         inp = inp[:-1]
-                    if c.name == "KEY_ENTER":
+                    elif c.name == "KEY_ENTER":
+                        command = inp
+                        self.selection_cache = ""
                         break
+                    elif c.name == "KEY_ESCAPE":
+                        # clear selection cache
+                        self.selection_cache = ""
+                        command = ""
+                        break
+                    else:
+                        self.message("Got metakey: {}".format(c.name))
+                        continue
                 else:
                     inp += c
 
-                candidate_commands = [cmd for cmd in self.commands if utils.matches(inp, cmd)]
-                for cmd in candidate_commands:
-                    if cmd == inp:
-                        self.clear_messages()
-                        self.clear_prompt()
-                        return cmd
-                self.message(" ".join(candidate_commands))
+                # check for command match
+                candidate_commands = self.get_candidate_commands(inp)
+                exact_match = [inp == c for c in candidate_commands]
+                if any(exact_match):
+                    command = [candidate_commands[i] for i in range(len(exact_match)) if exact_match[i]][0]
+                    command_name = [k for k in self.commands if self.commands[k] == command][0]
+                    info_msg = "command: " + command_name
+                    # display and break
+                    self.temp_print(inp, x, y)
+                    break
+
+                # show possible command matches from current string
+                if candidate_commands:
+                    self.message(" ".join(candidate_commands))
+                else:
+                    # no candidate commands -- check if it's a selection
+                    if utils.is_index_list(inp) or self.selection_cache:
+                        if not utils.is_valid_index_list(inp):
+                            info_msg = "invalid selection"
+                        else:
+                            info_msg = "selection"
+                            # if there's a cache, update it
+                            self.selection_cache = inp
+                            command = inp
+                            # display and break
+                            self.temp_print(inp, x, y)
+                            break
+                    else:
+                        # invalid input: show suggestions starting from the last  valid sequence
+                        # shave off that last invalid char
+                        inp = inp[:-1]
+                        if not inp:
+                            info_msg = "Candidate commands: {}".format(" ".join(self.commands.values()))
+                        else:
+                            info_msg = "Candidate commands: {}".format(" ".join(self.get_candidate_commands(inp)))
+                        self.message(info_msg)
+
+                # show current entry
                 self.temp_print(inp, x, y)
-                # self.temp_print("printed" + str(self.get_cursor()), x=30)
-                # self.temp_print(inp, x=30, y=self.y + 4)
-        self.clear_messages()
+                self.message(info_msg)
+
         self.clear_prompt()
-        return inp
+        if self.selection_cache:
+            self.temp_print(self.selection_cache, x, y)
+        self.message(info_msg)
+        return command
+
+    def get_candidate_commands(self, partial_str):
+        return [cmd for cmd in self.commands.values() if utils.matches(partial_str, cmd)]
 
     def clear_data(self):
         for line in (range(self.data_start_line, self.data_end_line)):
@@ -423,8 +483,12 @@ class Blessed(Io):
     def clear_messages(self):
         self.clear_line(self.layout.message[1], self.layout.message[0])
 
-    def message(self, msg):
+    def message(self, msg, large=False):
         self.clear_messages()
+        message_size = len(msg)
+        if message_size > self.message_buffer_size:
+            msg = msg[:self.message_buffer_size - 3] + "..."
+        # self.temp_print(msg, *self.layout.large_message)
         self.temp_print(msg, *self.layout.message)
 
     def input_multichar(self, msg=None):
@@ -466,7 +530,8 @@ class Blessed(Io):
         self.temp_print(prompt, *self.layout.command)
 
     def clear_prompt(self):
-        self.clear_line(self.layout.command[1], self.layout.message[0])
+        # self.clear_line(self.layout.command[1], self.layout.message[0])
+        self.temp_print(" " * self.command_buffer_size, *self.layout.command)
 
     def clear_line(self, line_num, start_x=0):
         with self.term.location(start_x, line_num):
@@ -477,8 +542,8 @@ class Blessed(Io):
         print(self.term.move(x, y))
 
     def idle(self):
-        # self.clear_data()
 
+        # self.clear_prompt()
         self.temp_print(self.prompt, *self.layout.command)
         # self.temp_print(self.prompt, *self.layout.command)
         # self.temp_print(self.prompt, *self.layout.command)
@@ -511,16 +576,30 @@ class Blessed(Io):
     # printing funcs, add data clearing
     def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False):
         self.clear_data()
-        Io.print_entries_enum(self, x_iter, entry_collection, at_most, additional_fields, print_newline)
+        with self.term.location(0, self.data_start_line):
+            Io.print_entries_enum(self, x_iter, entry_collection, at_most, additional_fields, print_newline)
 
 
     def print_entry_contents(self, entry):
-        Io.print_entry_contents(self, entry)
+        # self.clear_data()
+        if not self.printing_multiple_entries:
+            with self.term.location(0, self.data_start_line):
+                Io.print_entry_contents(self, entry)
+        else:
+            Io.print_entry_contents(self, entry)
     # def search(self, query, candidates, at_most):
     #     return process.extract(query, candidates, limit=at_most)
 
+    def print_entries_contents(self, entries):
+        self.clear_data()
+        self.printing_multiple_entries = True
+        with self.term.location(0, self.data_start_line):
+            Io.print_entries_contents(self, entries)
+        self.printing_multiple_entries = False
+
     def error(self, msg):
         self.message("(!) {}".format(msg))
+
 
 if __name__ == '__main__':
     print("Do it.")

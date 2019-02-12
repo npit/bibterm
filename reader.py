@@ -426,11 +426,19 @@ class Entry:
         self.keywords = kw
         self.modified_collection = True
 
-    def get_pretty_dict(self):
+    def get_pretty_dict(self, compact=True):
         d = OrderedDict()
         for key in ["ENTRYTYPE", "ID", "author", "title", "year", "keywords", "file"]:
             if key in self.raw_dict:
-                d[key] = self.raw_dict[key]
+                value = self.raw_dict[key]
+                if compact:
+                    # concat. list into a string to display in a single line
+                    if type(value) == list:
+                        value = " ".join(value).strip()
+                    # skip empty values
+                    if not value:
+                        continue
+                d[key] = value
         return d
 
 

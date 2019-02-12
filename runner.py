@@ -49,14 +49,13 @@ class Runner:
 
         # ui
         self.visual = setup(conf)
-        self.visual.commands = self.commands
-
+        self.visual.commands = conf.controls
 
     def search(self, query=None):
+        self.visual.log("Starting search")
         search_done = False
         just_began_search = True
         query_supplied = bool(query)
-        search_results = None
         while True:
             # get new search object, if it's a continued search OR no pre-given query
             if not just_began_search or (just_began_search and not query_supplied):
@@ -93,7 +92,6 @@ class Runner:
 
             self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
             just_began_search = False
-            search_results = results_ids
             if not self.visual.does_incremental_search:
                 break
 
@@ -101,13 +99,16 @@ class Runner:
         self.push_reference_list(results_ids, command="{} {}".format(self.commands.search, query))
 
     # print entry, only fields of interest
-    def inspect_entry(self, ones_idx):
-        if not isinstance(ones_idx, int) or ones_idx > len(self.reference_entry_id_list) or ones_idx < 1:
-            self.visual.error("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(self.reference_entry_id_list)))
-            return
-        ID = self.reference_entry_id_list[ones_idx - 1]
-        self.visual.print("Entry #[{}]".format(ones_idx))
-        self.visual.print_entry_contents(self.entry_collection.entries[ID])
+    def inspect_entries(self, ones_idxs):
+        for ones_idx in ones_idxs:
+            if not isinstance(ones_idx, int) or ones_idx > len(self.reference_entry_id_list) or ones_idx < 1:
+                self.visual.error("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(self.reference_entry_id_list)))
+                return
+
+        ids = [self.reference_entry_id_list[ones_idx - 1] for ones_idx in ones_idxs]
+        # self.visual.print("Entry #[{}]".format(ones_idx))
+        self.visual.print_entries_contents([self.entry_collection.entries[ID] for ID in ids])
+        # self.visual.print_entry_contents(self.entry_collection.entries[ID])
 
     # singleton editor fetcher
     def get_editor(self):
@@ -133,11 +134,11 @@ class Runner:
         # no command offered: it's a number, select from results (0-addressable)
         nums = utils.get_index_list(inp, len(self.reference_entry_id_list))
         if nums is None:
-            self.visual.print("Invalid selection: {}".format(inp))
+            self.visual.log("Invalid selection: {}".format(inp))
             return
-        for num in nums:
-            self.inspect_entry(num)
+        self.inspect_entries(nums)
         self.cached_selection = nums
+        self.visual.log("Displaying {} {}".format(len(nums), "entry" if len(nums) == 1 else "entries"))
 
     def get_stored_input(self):
         self.has_stored_input = False
@@ -462,7 +463,10 @@ class Runner:
             elif command == self.commands.clear:
                 self.visual.clear()
             elif command == self.commands.show:
-                self.select(self.cached_selection)
+                if self.cached_selection is not None:
+                    self.select(self.cached_selection)
+                else:
+                    self.visual.error("No selection to show.")
             elif utils.is_index_list(command):
                 # print(self.reference_entry_id_list)
                 # for numeric input, select these entries

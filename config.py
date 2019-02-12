@@ -40,7 +40,7 @@ def get_defaults(conf):
         "repeat": "r",
         "show": "sh",
         "quit": "q",
-        "save": "s",
+        "save": "sa",
         "cite": "c",
         "pdf_file": "fp",
         "pdf_web": "fw",
