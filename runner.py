@@ -74,7 +74,7 @@ class Runner:
                 res = self.filter(field, query)
                 ids, scores = [r[0] for r in res], [r[1] for r in res]
                 with utils.OnlyDebug(self.visual):
-                    self.visual.print("Results for query: {} on field: {}".format(query, field))
+                    self.visual.log("Results for query: {} on field: {}".format(query, field))
                     self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids], self.entry_collection, additional_fields=list(map(str, scores)), print_newline=True)
 
                 for i in range(len(ids)):
@@ -127,11 +127,11 @@ class Runner:
         try:
             num = int(num_str)
             if not self.entry_collection.num_in_range(num):
-                self.visual.print("{} is outside of entry number range: [1,{}] .".format(num, len(self.entry_collection.id_list)))
+                self.visual.error("{} is outside of entry number range: [1,{}] .".format(num, len(self.entry_collection.id_list)))
                 return None
             return num
         except ValueError:
-            self.visual.print("Whoopsie, sth went wrong.")
+            self.visual.error("Whoopsie, sth went wrong.")
             return None
 
     def modified_collection(self):
@@ -145,7 +145,7 @@ class Runner:
             return
         self.inspect_entries(nums)
         self.cached_selection = nums
-        self.visual.log("Displaying {} {}".format(len(nums), "entry" if len(nums) == 1 else "entries"))
+        self.visual.log("Displaying {} {}: {}".format(len(nums), "entry" if len(nums) == 1 else "entries", nums))
 
     def get_stored_input(self):
         self.has_stored_input = False
@@ -157,7 +157,7 @@ class Runner:
             if arg[0].isdigit():
                 at_most = int(arg)
                 if at_most >= len(self.reference_entry_id_list):
-                    self.visual.print("Reference is already {}-long.".format(len(self.reference_entry_id_list)))
+                    self.visual.error("Reference is already {}-long.".format(len(self.reference_entry_id_list)))
                     return
                 show_list = self.reference_entry_id_list[:int(arg)]
             else:
@@ -272,6 +272,7 @@ class Runner:
         self.command_history.append((len(self.reference_entry_id_list), command))
 
     def get_input(self, input_cmd):
+        self.visual.idle()
         if input_cmd is not None:
             user_input = input_cmd
             self.visual.debug("Got input from main: [{}]".format(input_cmd))
@@ -303,8 +304,10 @@ class Runner:
             return
         modified_status = "*has been modified*" if self.modified_collection() else "has not been modified"
         if verify_write:
-            # for explicit calls, only ask for verification if it's NOT been modified
+            # for explicit calls, do not ask for verification if it's NOT been modified
             if called_explicitely and not self.modified_collection():
+                pass
+            else:
                 if not self.visual.yes_no("The collection {}. Overwrite?".format(modified_status), default_yes=False):
                     return
         # write
@@ -317,9 +320,13 @@ class Runner:
             self.visual.error("Need a single selection to set pdf to.")
             return
         entry = self.entry_collection.entries[self.reference_entry_id_list[nums[0] - 1]]
+        if entry.file is not None:
+            if not self.visual.yes_no("Pdf path exists: {}, replace?".format(entry.file), default_yes=False):
+                return
         updated_entry = self.get_editor().set_file(entry)
         if self.editor.collection_modified and updated_entry is not None:
             self.entry_collection.replace(updated_entry)
+            self.visual.log("Entry {} updated with pdf path.".format(entry.ID))
 
     def get_pdf_from_web(self, str_selection=None):
         nums = self.get_index_selection(str_selection)
@@ -328,8 +335,11 @@ class Runner:
             return
         entry_id = self.reference_entry_id_list[nums[0] - 1]
         entry = self.entry_collection.entries[entry_id]
+        if entry.file is not None:
+            if not self.visual.yes_no("Pdf path exists: {}, replace?".format(entry.file), default_yes=False):
+                return
         getter = Getter(self.conf)
-        pdf_url = self.visual.input("Give pdf url to download")
+        pdf_url = self.visual.ask_user("Give pdf url to download", multichar=True)
         file_path = getter.get_web_pdf(pdf_url, entry_id)
         if file_path is None:
             self.visual.error("Failed to download from {}.".format(pdf_url))
@@ -337,13 +347,16 @@ class Runner:
         updated_entry = self.get_editor().set_file(entry, file_path=file_path)
         self.entry_collection.replace(updated_entry)
 
-    def search_web_pdf(self, str_selection=None):
+    def search_pdf_external_browser(self, str_selection=None):
         nums = self.get_index_selection(str_selection)
         if nums is None or not nums or len(nums) > 1:
             self.visual.error("Need a single selection to download pdf to.")
             return
         entry_id = self.reference_entry_id_list[nums[0] - 1]
         entry = self.entry_collection.entries[entry_id]
+        if entry.file is not None:
+            if not self.visual.yes_no("Pdf path exists: {}, replace?".format(entry.file), default_yes=False):
+                return
         pdf_path = self.get_getter().search_web_pdf(entry_id, entry.title)
 
         updated_entry = self.get_editor().set_file(entry, file_path=pdf_path)
@@ -371,6 +384,7 @@ class Runner:
             if command == self.commands.quit:
                 break
             # history
+            # -------------------------------------------------------
             if command == self.commands.history_back:
                 n_steps = utils.str_to_int(arg, default=-1)
                 self.step_history(n_steps)
@@ -388,6 +402,7 @@ class Runner:
                 self.reset_history()
             elif command == self.commands.history_show:
                 self.show_history()
+            # -------------------------------------------------------
             elif command == self.commands.delete:
                 nums = self.get_index_selection(arg)
                 if nums is None or not nums:
@@ -406,12 +421,16 @@ class Runner:
                 # clipboard.copy(citation_id)
                 clipboard.copy(citation)
                 self.visual.message("Copied to clipboard: {}".format(citation))
-            # adding paths to pdfs
+            # -------------------------------------------------------
+            # adding local paths to pdfs
             elif command.startswith(self.commands.pdf_file):
                 self.set_local_pdf_path(arg)
-            # fetching pdfs from the web
+            # fetching pdfs from a web URL
             elif command == self.commands.pdf_web:
                 self.get_pdf_from_web(arg)
+            # searching for a pdf in an external browser
+            elif command == self.commands.pdf_search:
+                self.search_pdf_external_browser(arg)
             # searching
             elif command.startswith(self.commands.search):
                 query = arg if arg else ""
@@ -439,7 +458,8 @@ class Runner:
                 self.editor.clear_cache()
             # opening pdfs
             elif utils.matches(command, self.commands.pdf_open):
-                if not arg:
+                nums = self.get_index_selection(arg)
+                if not nums or nums is None:
                     self.visual.print("Need a selection to open.")
                 # arg has to be a single string
                 nums = self.get_index_selection(arg)
@@ -454,11 +474,13 @@ class Runner:
                             self.search_web_pdf()
 
             # fetching from google scholar
-            elif utils.matches(command, "get"):
+            elif utils.matches(command, self.commands.get):
                 getter = self.get_getter()
                 if not arg:
-                    self.visual.error("Need a query to get entry from the internet.")
-                    continue
+                    arg = self.visual.ask_user("Search what on google scholar?", multichar=True)
+                    if not arg:
+                        self.visual.error("Nothing entered, aborting.")
+                        continue
                 try:
                     res = getter.get_gscholar(arg)
                 except:
@@ -467,10 +489,11 @@ class Runner:
                 if not res:
                     self.visual.error("No data retrieved.")
                     continue
+
                 reader2 = Reader(self.conf)
                 reader2.read_string(res)
                 read_entries_dict = reader2.get_entry_collection().entries
-                self.visual.print("Got entry item(s):")
+                self.visual.log("Retrieved entry item(s):")
                 for entry in read_entries_dict.values():
                     self.visual.print_entry_contents(entry)
                 if not self.visual.yes_no("Store?"):
@@ -481,10 +504,10 @@ class Runner:
                     continue
                 self.reset_history()
                 self.cached_selection = [i + 1 for i in range(len(self.reference_entry_id_list)) if self.reference_entry_id_list[i] in read_entries_dict]
-                self.visual.print("Item is now selected: {}.".format(self.cached_selection))
+                self.visual.message("Item is now selected: {}.".format(self.cached_selection))
 
                 # pdf
-                what = self.visual.input("Pdf?", "local url web-search *skip")
+                what = self.visual.ask_user("Pdf?", "local url web-search *skip")
                 if utils.matches(what, "skip"):
                     return
                 if utils.matches(what, "url"):
@@ -513,7 +536,7 @@ class Runner:
                 self.select(user_input)
             else:
                 self.visual.error("Undefined command: {}".format(command))
-                self.visual.print("Available: {}".format(self.commands))
+                self.visual.message("Available: {}".format(self.commands))
             previous_command = command
         # end of loop
         self.save_if_modified()

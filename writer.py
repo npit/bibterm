@@ -36,7 +36,7 @@ class Writer:
             #     entry = entry_collection.entries[ID]
             #     self.visual.print("{} {}".format(self.visual.ID_str(entry.ID, entry_collection.maxlen_id), self.visual.title_str(entry.title, entry_collection.maxlen_title)))
 
-            what = self.visual.input("Duplicates exist, what do?", "replace omit *abort")
+            what = self.visual.ask_user("Duplicates exist, what do?", "replace omit *abort")
             if utils.matches(what, "abort"):
                 self.visual.print("Aborting.")
                 exit(1)
@@ -72,7 +72,7 @@ class Writer:
             bibtexparser.dump(entry_collection.get_writable_db(), f)
 
     def write_confirm(self, entry_collection):
-        what = self.visual.input("Proceed to write?", "*yes no")
+        what = self.visual.yes_no("Proceed to write?")
         if utils.matches(what, "yes"):
             self.write(entry_collection)
             self.visual.print("Wrote!")

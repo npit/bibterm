@@ -2,6 +2,14 @@ import os
 from collections import namedtuple
 
 
+def limit_size(msg, max_size, trunc_symbol="..."):
+    """Apply max-length truncation to a string message
+    """
+    if len(msg) > max_size:
+        msg = msg[:max_size - len(trunc_symbol)] + trunc_symbol
+    return msg
+
+
 # check if s equals or is the start of opts or any of its elements
 def matches(partial, full):
     if type(full) == list:

@@ -44,8 +44,7 @@ class EntryCollection:
         all_ids = [x["ID"] for x in bib_db.entries]
         duplicates = [item for item, count in collections.Counter(all_ids).items() if count > 1]
         if duplicates:
-            self.visual.print("{} duplicates found:\n{}\n".format(len(duplicates), "\n".join(duplicates)))
-            self.visual.print("Fix them first, bye!")
+            self.visual.error("{} duplicates found and need fixing:\n{}\n Fix them,bye!".format(len(duplicates), "\n".join(duplicates)))
             exit(1)
 
         for i in range(len(bib_db.entries)):
@@ -78,7 +77,7 @@ class EntryCollection:
         del self.bibtex_db.entries_dict[ID]
         idx = [i for i in range(len(self.bibtex_db.entries)) if self.bibtex_db.entries[i]["ID"] == ID]
         if len(idx) > 1:
-            self.visual.print("Mutiple indexes with ID {} found to remove.".format(ID))
+            self.visual.error("Mutiple indexes with ID {} found to remove.".format(ID))
             exit(1)
         del self.bibtex_db.entries[idx[0]]
         # containers
@@ -109,10 +108,10 @@ class EntryCollection:
 
     def correct_id(self, current_id, expected_id):
         # id
-        self.visual.print("Correcting {}/{} (#{} fixed, {} fixes) id {} -> {}.".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, current_id, expected_id))
+        self.visual.log("Correcting {}/{} (#{} fixed, {} fixes) id {} -> {}.".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, current_id, expected_id))
         # entries dict
         if expected_id in self.bibtex_db.entries_dict:
-            self.visual.print("Correcting {} to {exp}, but {exp} already exists in underlying bibtex db.".format(current_id, exp=expected_id))
+            self.visual.log("Correcting {} to {exp}, but {exp} already exists in underlying bibtex db.".format(current_id, exp=expected_id))
             exit(1)
         # assign the new dict key
         self.bibtex_db.entries_dict[expected_id] = self.bibtex_db.entries_dict[current_id]
@@ -132,7 +131,7 @@ class EntryCollection:
 
     def change_keyword(self, kw, new_kws, entry_id):
         if kw in self.keywords_map and self.keywords_map[kw] != new_kws:
-            self.visual.print("Specified different mapping: {} to existing one: {}, for encountered keyword: {}".format(kw, self.keywords_map[kw], new_kws))
+            self.visual.log("Specified different mapping: {} to existing one: {}, for encountered keyword: {}".format(kw, self.keywords_map[kw], new_kws))
 
         self.keywords_map[kw] = new_kws
         for nkw in new_kws:
@@ -153,7 +152,7 @@ class EntryCollection:
                 continue
             if kw != raw_kw:
                 self.fixes += 1
-                self.visual.print("Correcting {}/{} (#{} fixed, {} fixes) [keyword] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, raw_kw, kw))
+                self.visual.log("Correcting {}/{} (#{} fixed, {} fixes) [keyword] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, raw_kw, kw))
                 applied_changes = True
             # filter out rejected ones
             if kw in self.keywords_discard:
@@ -174,7 +173,7 @@ class EntryCollection:
         while keywords:
             self.visual.print_enum(keywords)
             if self.keyword_override_action is None:
-                what = self.visual.input("Process keywords for entry [{}] ".format(index_id),
+                what = self.visual.ask_user("Process keywords for entry [{}] ".format(index_id),
                                          "Keep-all Discard-all *keep discard change #1 #2 #... #|  #*all ", check=False)
                 cmd, *idx_args = what.strip().split()
                 idx_list = [i - 1 for i in utils.get_index_list(idx_args, len(keywords))]
@@ -183,7 +182,7 @@ class EntryCollection:
                 elif utils.matches(cmd, 'all'):
                     idx_list = range(len(keywords))
             else:
-                self.visual.print("Applying action to all entries & keywords: {}".format(self.keyword_override_action))
+                self.visual.log("Applying action to all entries & keywords: {}".format(self.keyword_override_action))
                 cmd, idx_list = self.keyword_override_action, range(len(keywords))
 
             if utils.matches(cmd, "keep"):
@@ -193,7 +192,7 @@ class EntryCollection:
                     keywords_final.append(keywords[i])
             elif utils.matches(cmd, "change"):
                 applied_changes = True
-                new_kws = self.visual.input("Change keywords: {} to what?".format([keywords[i] for i in idx_list]))
+                new_kws = self.visual.ask_user("Change keywords: {} to what?".format([keywords[i] for i in idx_list]))
                 new_kws = new_kws.strip().split()
                 for i in idx_list:
                     self.change_keyword(keywords[i], new_kws, index_id)
@@ -209,7 +208,7 @@ class EntryCollection:
                 self.keyword_override_action = "discard"
                 continue
             else:
-                self.visual.print("Invalid input.")
+                self.visual.error("Invalid input.")
                 continue
             # remove used up indexes
             keywords = [keywords[i] for i in range(len(keywords)) if i not in idx_list]
@@ -276,7 +275,7 @@ class EntryCollection:
                 if title[-1] == ".":
                     title = title[:-1]
                 self.fixes += 1
-                self.visual.print("Correcting {}/{} (#{} fixed, {} fixes) [title] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, ent.title, title))
+                self.visual.log("Correcting {}/{} (#{} fixed, {} fixes) [title] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, ent.title, title))
                 # set it to the bibtex dict
                 self.bibtex_db.entries_dict[ID]["title"] = title
                 # set it to the bibtex list
@@ -295,7 +294,7 @@ class EntryCollection:
     def need_fix(self, entry_id, problem):
         fix = False
         if self.do_fix is None:
-            what = self.visual.input("Fix entry problem: [{} : {}]?".format(entry_id, problem), "yes no *Yes-all No-all")
+            what = self.visual.ask_user("Fix entry problem: [{} : {}]?".format(entry_id, problem), "yes no *Yes-all No-all")
             if utils.matches(what, "Yes-all"):
                 self.do_fix = True
             if utils.matches(what, "No-all"):
@@ -326,7 +325,7 @@ class EntryCollection:
         title = ent.title.lower()
         # update object lookup dict
         if ID in self.entries:
-            self.visual.print("Entry with id {} already in entries dict!".format(ID))
+            self.visual.error("Entry with id {} already in entries dict!".format(ID))
             return
         self.entries[ID] = ent
         # update title-id mapping
@@ -494,7 +493,7 @@ class Reader:
                 if line.startswith("%"):
                     # skip it
                     if not applied_changes:
-                        self.visual.print("Deleting commented lines.")
+                        self.visual.log("Deleting commented lines.")
                     applied_changes = True
                     continue
                 newlines.append(line)
@@ -519,7 +518,7 @@ class Reader:
         parser = BibTexParser()
         parser.customization = Reader.customizations
         db = bibtexparser.loads(string, parser=parser)
-        self.visual.print("Loaded {} entries from supplied string.".format(len(db.entries)))
+        self.visual.log("Loaded {} entries from supplied string.".format(len(db.entries)))
         self.entry_collection = self.load_collection(db)
 
     # Read bibtex file, preprocessing out comments
@@ -528,7 +527,7 @@ class Reader:
             input_file = self.preprocess(self.bib_path)
         self.visual.log("Reading from file {}.".format(input_file))
         if not exists(input_file):
-            self.visual.print("File {} does not exist.".format(input_file))
+            self.visual.error("File {} does not exist.".format(input_file))
             exit(1)
         # read it
         with open(input_file) as f:
@@ -542,14 +541,14 @@ class Reader:
         updated_tags = self.entry_collection.get_tag_information()
         if updated_tags != self.tags_info:
             self.tags_info = updated_tags
-            what = self.visual.input("Write updated tags to the original file: {}?".format(self.tags_path), "yes *no")
+            what = self.visual.yes_no("Write updated tags to the original file: {}?".format(self.tags_path), default_yes=False)
             if utils.matches(what, "yes"):
                 with open(self.tags_path, "w") as f:
                     f.write(json.dumps(updated_tags, indent=4, sort_keys=True))
 
         if self.entry_collection.entries_fixed > 0:
-            self.visual.print("Applied a total of {} fixes to {} entries.".format(self.entry_collection.fixes, self.entry_collection.entries_fixed))
-            what = self.visual.input("Write fixes to the original source file: {}?".format(self.bib_path), "yes *no")
+            self.visual.message("Applied a total of {} fixes to {} entries.".format(self.entry_collection.fixes, self.entry_collection.entries_fixed))
+            what = self.visual.yes_no("Write fixes to the original source file: {}?".format(self.bib_path), default_yes=False)
             if utils.matches(what, "no"):
                 pass
             else:

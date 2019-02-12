@@ -85,40 +85,50 @@ class Io:
     def yes_no(self, msg, default_yes=True):
         opts = "*yes no" if default_yes else "yes *no"
         what = self.input(msg, opts)
+        if what is None:
+            return what
         return utils.matches(what, "yes")
 
-    # func to show choices. Bang options are explicit and are not edited
-    def input(self, msg="", options_str=None, check=True):
-        default_idx = None
+    def get_raw_input(msg):
+        return input(msg)
+
+    def generate_user_responses(self, msg, options_str):
+        opts = None
+        opt_print = None
+        default_option_idx = None
         if options_str is not None:
             opts = options_str.split()
             explicit_opts = [x[1:] for x in opts if x.startswith("#")]
             opts = [x for x in opts if not x.startswith("#")]
 
-            default_idx = [i for i in range(len(opts)) if opts[i].startswith(self.default_option_mark)]
-            if default_idx:
-                if len(default_idx) > 1:
+            default_option_idx = [i for i in range(len(opts)) if opts[i].startswith(self.default_option_mark)]
+            if default_option_idx:
+                if len(default_option_idx) > 1:
                     self.error("Multiple defaults:" + options_str)
-                default_idx = default_idx[0]
+                default_option_idx = default_option_idx[0]
                 # remove asterisk from raw inputs
-                opts[default_idx] = opts[default_idx][1:]
+                opts[default_option_idx] = opts[default_option_idx][1:]
 
             opt_print = ["[{}]{}".format(x[0], x[1:]) for x in opts]
-            if default_idx is not None:
+            if default_option_idx is not None:
                 # add asterisk on print
-                opt_print[default_idx] = self.default_option_mark + opt_print[default_idx]
+                opt_print[default_option_idx] = self.default_option_mark + opt_print[default_option_idx]
             opt_print = " ".join(opt_print + explicit_opts)
             msg += " " + opt_print + ": "
         else:
             if msg:
                 msg += ": "
+        return msg, opts, opt_print, default_option_idx
 
+    # func to show choices. Bang options are explicit and are not edited
+    def ask_user(self, msg="", options_str=None, check=True):
+        msg, opts, opt_print, default_option_idx = self.generate_user_responses(msg, options_str)
         while True:
-            ans = input(msg)
+            ans = self.get_raw_input(msg)
             if options_str:
                 # default option on empty input
-                if not ans and default_idx is not None:
-                    return opts[default_idx]
+                if not ans and default_option_idx is not None:
+                    return opts[default_option_idx]
                 # loop on invalid input, if check
                 if check:
                     if not utils.matches(ans, opts):
@@ -242,9 +252,11 @@ class Io:
     def print_entry_contents(self, entry):
         if self.only_debug and not self.do_debug:
             return
-        self.print("---------------")
-        self.print(json.dumps(entry.get_pretty_dict(), indent=2))
-        self.print("---------------")
+        st = json.dumps(entry.get_pretty_dict(), indent=2)
+        # remove enclosing {}
+        st = " " + st.strip()[1:-1].strip()
+        self.print(st)
+        self.print("_" * 15)
 
     def print_entries_contents(self, entries):
         if self.only_debug and not self.do_debug:
@@ -255,12 +267,13 @@ class Io:
     def pause(self, msg):
         self.input(msg)
 
+    
+
 
 class Blessed(Io):
     name = "blessed"
     term = None
     instance = None
-    cursor_loc = None
     search_cache = ""
     selection_cache = ""
     does_incremental_search = True
@@ -280,6 +293,7 @@ class Blessed(Io):
         log = None
         message = None
         large_message = None
+        prompt_in_use = None
 
     def initialize_layout(self):
         # initialize positions
@@ -299,6 +313,7 @@ class Blessed(Io):
 
             self.command_buffer_size = self.layout.message[0] - 1
             self.message_buffer_size = self.width - self.layout.message[0]
+            self.log_buffer_size = self.width
 
         self.curren_state = self.states.command
 
@@ -309,22 +324,17 @@ class Blessed(Io):
         self.height = self.term.height - 2
         self.initialize_layout()
         self.clear()
-        self.data_start_line = 1
-        self.data_end_line = self.height - 1
+        self.data_start_line = 2
+        self.data_end_line = self.height -1
+        self.data_buffer_size = self.data_end_line - self.data_start_line -3
         self.search_cache = ""
-
-    def find_cursor(self):
-        # locations
-        self.y, self.x = self.term.get_location()
-
-    def get_cursor(self):
-        # locations
-        return self.term.get_location()
+        self.prompt_in_use = False
+        self.data_buffer = []
 
     def log(self, msg):
         self.clear_line(self.layout.log[1])
         with self.term.location(*self.layout.log):
-            print(msg)
+            print(utils.limit_size(msg, self.log_buffer_size))
 
     def get_instance(conf=None):
         if Blessed.instance is not None:
@@ -335,26 +345,46 @@ class Blessed(Io):
         Blessed.instance = Blessed(conf)
         return Blessed.instance
 
-    def print(self, msg, temp=False, no_newline=False):
+    def print(self, msg, temp=False, no_newline=False, use_buffer=False):
         if not msg:
             return
         if self.only_debug and not self.do_debug:
             return
-        print(self.term.normal, msg)
+        if use_buffer:
+            self.clear_data()
+            if not msg:
+                return
+            if self.only_debug and not self.do_debug:
+                return
+            # put lines to buffer
+            msg = msg.split("\n")
+            for i, line in enumerate(msg):
+                if len(line) > self.width:
+                    line = utils.limit_size(line, self.width)
+                    msg[i] = line
+            self.data_buffer.extend(msg)
+            # restrict to size
+            buffer_to_print = "\n".join(self.data_buffer[-self.data_buffer_size:])
+            print(self.term.normal, buffer_to_print)
+            # breakpoint()
+        else:
+            print(self.term.normal, msg)
+
 
     def clear(self):
         print(self.term.clear())
 
-    def get_single_char_input(self, msg=None):
-        if msg is not None and not msg:
-            self.print(msg)
+    def get_raw_input(self, msg=None, coords=None):
         with self.term.cbreak():
-            return self.term.inkey()
+            c = self.term.inkey()
+        if coords is not None:
+            if not c.is_sequence:
+                self.temp_print(c, *coords)
+        return c
 
     def get_position_by_state(self):
         if self.curren_state == self.states.command:
             return self.layout.command
-
 
     def receive_search(self):
         done = False
@@ -367,7 +397,7 @@ class Blessed(Io):
 
         # get_character
         # sys.stderr.write("{} {} ".format(x, y))
-        c = self.get_single_char_input()
+        c = self.get_raw_input()
         if c.is_sequence:
             # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
             if c.name == "KEY_DELETE":
@@ -389,7 +419,6 @@ class Blessed(Io):
         #         return cmd
         # self.message(" ".join(candidate_commands))
         self.temp_print(self.search_cache, x, y)
-        # self.temp_print("printed" + str(self.get_cursor()), x=30)
         # self.temp_print(inp, x=30, y=self.y + 4)
         self.move(0, self.data_start_line)
         if done is False:
@@ -407,7 +436,7 @@ class Blessed(Io):
         while not done:
             with self.term.cbreak():
                 # get_character
-                c = self.get_single_char_input()
+                c = self.get_raw_input()
                 if c.is_sequence:
                     if c.name == "KEY_DELETE":
                         self.clear_line(y, starting_x)
@@ -415,10 +444,12 @@ class Blessed(Io):
                     elif c.name == "KEY_ENTER":
                         command = inp
                         self.selection_cache = ""
+                        self.prompt_in_use = False
                         break
                     elif c.name == "KEY_ESCAPE":
                         # clear selection cache
                         self.selection_cache = ""
+                        self.prompt_in_use = False
                         command = ""
                         break
                     else:
@@ -447,6 +478,7 @@ class Blessed(Io):
                         if not utils.is_valid_index_list(inp):
                             info_msg = "invalid selection"
                         else:
+                            self.prompt_in_use = True
                             info_msg = "selection"
                             # if there's a cache, update it
                             self.selection_cache = inp
@@ -482,55 +514,19 @@ class Blessed(Io):
             self.clear_line(line)
         self.move(0, self.data_start_line)
 
-
     def clear_messages(self):
         self.clear_line(self.layout.message[1], self.layout.message[0])
 
     def message(self, msg, large=False):
         self.clear_messages()
-        message_size = len(msg)
-        if message_size > self.message_buffer_size:
-            msg = msg[:self.message_buffer_size - 3] + "..."
+        msg = utils.limit_size(msg, self.message_buffer_size)
         # self.temp_print(msg, *self.layout.large_message)
         self.temp_print(msg, *self.layout.message)
 
-    def input_multichar(self, msg=None):
-        if msg is not None:
-            self.temp_print(msg)
-            self.x = len(msg) + 3
-            self.set_cursor()
-
-        sx, sy = self.get_cursor()
-
-        inp = ""
-        # set search prompt
-        self.update_prompt_symbol("/")
-        x, y = self.layout.command
-        starting_x = 2
-        x += starting_x
-        while True:
-            with self.term.cbreak():
-                # c = self.term.inkey()
-                # sys.stderr.write("{} {} ".format(x, y))
-                c = self.get_user_input()
-                if c.is_sequence:
-                    # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
-                    if c.name == "KEY_DELETE":
-                        self.clear_line(y, starting_x)
-                        inp = inp[:-1]
-                    if c.name == "KEY_ENTER":
-                        break
-                else:
-                    inp += c
-
-                self.temp_print(inp, x, y)
-                # self.temp_print("printed" + str(self.get_cursor()), x=30)
-                # self.temp_print(inp, x=30, y=self.y + 4)
-        return inp
-
-
     def update_prompt_symbol(self, prompt):
         self.temp_print(prompt, *self.layout.command)
+        coords = self.layout.command[0] + len(prompt) + 1, self.layout.command[1]
+        return coords
 
     def clear_prompt(self):
         # self.clear_line(self.layout.command[1], self.layout.message[0])
@@ -540,30 +536,23 @@ class Blessed(Io):
         with self.term.location(start_x, line_num):
             print(self.term.clear_eol())
 
-
     def move(self, x, y):
         print(self.term.move(x, y))
 
     def idle(self):
+        # prompt
+        if not self.prompt_in_use:
+            self.clear_prompt()
+            self.update_prompt_symbol(self.prompt)
+        # divider lines
+        self.draw_lines()
 
-        # self.clear_prompt()
-        self.temp_print(self.prompt, *self.layout.command)
-        # self.temp_print(self.prompt, *self.layout.command)
-        # self.temp_print(self.prompt, *self.layout.command)
-        # self.temp_print(self.prompt, *self.layout.command)
         self.term.move(0, 0)
-
-
-    def set_cursor(self, x=None, y=None):
-        if x is not None:
-            self.x = x
-        if y is not None:
-            self.y = y
-        self.update_cursor()
-
-    def update_cursor(self):
-        self.term.move(self.x, self.y)
-
+    def draw_lines(self):
+        # top
+        self.temp_print("_" * self.width, 0, self.layout.log[1] + 1)
+        # bottom
+        self.temp_print("_" * self.width, 0, self.layout.command[1] - 1)
 
     def temp_print(self, msg, x, y):
         # # skip the log line
@@ -583,9 +572,9 @@ class Blessed(Io):
             Io.print_entries_enum(self, x_iter, entry_collection, at_most, additional_fields, print_newline)
 
 
-    def print_entry_contents(self, entry):
+    def print_entry_contents(self, entry, printing_multiple_entries=False):
         # self.clear_data()
-        if not self.printing_multiple_entries:
+        if not printing_multiple_entries:
             with self.term.location(0, self.data_start_line):
                 Io.print_entry_contents(self, entry)
         else:
@@ -595,13 +584,68 @@ class Blessed(Io):
 
     def print_entries_contents(self, entries):
         self.clear_data()
-        self.printing_multiple_entries = True
         with self.term.location(0, self.data_start_line):
-            Io.print_entries_contents(self, entries)
-        self.printing_multiple_entries = False
+            Io.print_entries_contents(self, entries, printing_multiple_entries=True)
 
     def error(self, msg):
         self.message("(!) {}".format(msg))
+
+    def yes_no(self, msg, default_yes=True):
+        opts = "*yes no" if default_yes else "yes *no"
+        what = self.ask_user(msg, opts)
+        if what is None:
+            return what
+        return utils.matches(what, "yes")
+
+    # func to show choices. Bang options are explicit and are not edited
+    def ask_user(self, msg="", options_str=None, check=True, multichar=False):
+        msg, opts, opt_print, default_option_idx = self.generate_user_responses(msg, options_str)
+        self.clear_prompt()
+        prompt_input_coords = self.update_prompt_symbol(msg)
+        while True:
+            if multichar:
+                ans = self.input_multichar(*prompt_input_coords)
+            else:
+                ans = self.get_raw_input(coords=prompt_input_coords)
+            if ans is None:
+                return None
+            ans = str(ans).strip()
+
+            if options_str:
+                # default option on empty input
+                if not ans and default_option_idx is not None:
+                    return opts[default_option_idx]
+                # loop on invalid input, if check
+                if check:
+                    if not utils.matches(ans, opts):
+                        self.error("Valid options are: " + opt_print)
+                        continue
+            else:
+                ans = ans.strip()
+            # valid or no-option input
+            return ans
+
+    def input_multichar(self, x, y):
+        """Input function that requres termination with RET or ESC
+        """
+        res = ""
+        done = False
+        while not done:
+            key = self.get_raw_input()
+            if key.is_sequence:
+                # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
+                if key.name == "KEY_DELETE":
+                    self.clear_line(y, x)
+                    res = res[:-1]
+                if key.name == "KEY_ENTER":
+                    done = True
+                if key.name == "KEY_ESCAPE":
+                    res = None
+                    done = True
+            else:
+                res += key
+            self.temp_print(res, x, y)
+        return res
 
 
 if __name__ == '__main__':
@@ -627,7 +671,6 @@ if __name__ == '__main__':
 
             with t.location(2, 10):
                 print(inp)
-            # self.temp_print("printed" + str(self.get_cursor()), x=30)
             # self.temp_print(inp, x=30, y=self.y + 4)
 
 

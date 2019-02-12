@@ -18,7 +18,8 @@ class Editor:
         self.do_apply_cache = None
 
     def get_raw_input(self, msg):
-        self.cache = self.visual.input(msg)
+        self.cache = self.visual.ask_user(msg, multichar=True)
+        breakpoint()
         return self.cache
 
     def get_input(self, msg):
@@ -33,7 +34,7 @@ class Editor:
             return self.get_raw_input(msg)
 
         # no hard setting exists, ask
-        what = self.visual.input("Insert existing input cache? {}".format(self.cache), "*yes Yes-all no No-all")
+        what = self.visual.ask_user("Insert existing input cache? {}".format(self.cache), "*yes Yes-all no No-all")
 
         # on hard selections, set variable and recurse
         if utils.matches(what, "Yes"):
@@ -50,11 +51,7 @@ class Editor:
             return self.get_raw_input(msg)
 
     def set_file(self, entry, file_path=None):
-        self.visual.print("Inserting pdf file to [{}]".format(entry.ID))
-        if entry.file is not None:
-            what = self.visual.input("Entry already has a file path {}. Replace?".format(entry.file), "*yes no")
-            if utils.matches(what, "no"):
-                return None
+        self.visual.log("About to insert pdf file to [{}]".format(entry.ID))
         if file_path is None:
             file_path = self.get_input("File path")
         if not file_path:

@@ -13,7 +13,7 @@ class Getter:
         pass
 
     def get_gscholar(self, query):
-        self.visual.print("Fetching google scholar content for query: [{}]".format(query))
+        self.visual.log("Fetching google scholar content for query: [{}]".format(query))
         res = gscholar.query(query)
         return "\n".join(res)
 
@@ -22,7 +22,7 @@ class Getter:
             pdf_dir = self.conf.pdf_dir
             output_path = join(pdf_dir, "{}.pdf".format(entry_id))
             urlretrieve(web_path, output_path)
-            self.visual.print("Fetching {} to {}.".format(web_path, output_path))
+            self.visual.log("Fetching {} to {}.".format(web_path, output_path))
             return output_path
         except ValueError as ex:
             self.visual.error(ex)
