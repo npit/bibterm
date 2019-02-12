@@ -311,6 +311,44 @@ class Runner:
         self.entry_collection.overwrite_file(self.conf)
         self.entry_collection.reset_modified()
 
+    def set_local_pdf_path(self, str_selection=None):
+        nums = self.get_index_selection(str_selection)
+        if nums is None or not nums or len(nums) > 1:
+            self.visual.error("Need a single selection to set pdf to.")
+            return
+        entry = self.entry_collection.entries[self.reference_entry_id_list[nums[0] - 1]]
+        updated_entry = self.get_editor().set_file(entry)
+        if self.editor.collection_modified and updated_entry is not None:
+            self.entry_collection.replace(updated_entry)
+
+    def get_pdf_from_web(self, str_selection=None):
+        nums = self.get_index_selection(str_selection)
+        if nums is None or not nums or len(nums) > 1:
+            self.visual.error("Need a single selection to download pdf to.")
+            return
+        entry_id = self.reference_entry_id_list[nums[0] - 1]
+        entry = self.entry_collection.entries[entry_id]
+        getter = Getter(self.conf)
+        pdf_url = self.visual.input("Give pdf url to download")
+        file_path = getter.get_web_pdf(pdf_url, entry_id)
+        if file_path is None:
+            self.visual.error("Failed to download from {}.".format(pdf_url))
+            return
+        updated_entry = self.get_editor().set_file(entry, file_path=file_path)
+        self.entry_collection.replace(updated_entry)
+
+    def search_web_pdf(self, str_selection=None):
+        nums = self.get_index_selection(str_selection)
+        if nums is None or not nums or len(nums) > 1:
+            self.visual.error("Need a single selection to download pdf to.")
+            return
+        entry_id = self.reference_entry_id_list[nums[0] - 1]
+        entry = self.entry_collection.entries[entry_id]
+        pdf_path = self.get_getter().search_web_pdf(entry_id, entry.title)
+
+        updated_entry = self.get_editor().set_file(entry, file_path=pdf_path)
+        self.entry_collection.replace(updated_entry)
+
     def loop(self, input_cmd=None):
         previous_command = None
         while(True):
@@ -370,30 +408,10 @@ class Runner:
                 self.visual.message("Copied to clipboard: {}".format(citation))
             # adding paths to pdfs
             elif command.startswith(self.commands.pdf_file):
-                nums = self.get_index_selection(arg)
-                if nums is None or not nums or len(nums) > 1:
-                    self.visual.error("Need a single selection to download pdf to.")
-                    continue
-                entry = self.entry_collection.entries[self.reference_entry_id_list[nums[0] - 1]]
-                updated_entry = self.get_editor().set_file(entry)
-                if self.editor.collection_modified and updated_entry is not None:
-                    self.entry_collection.replace(updated_entry)
+                self.set_local_pdf_path(arg)
             # fetching pdfs from the web
             elif command == self.commands.pdf_web:
-                nums = self.get_index_selection(arg)
-                if nums is None or not nums or len(nums) > 1:
-                    self.visual.error("Need a single selection to download pdf to.")
-                    continue
-                entry_id = self.reference_entry_id_list[nums[0] - 1]
-                entry = self.entry_collection.entries[entry_id]
-                getter = Getter(self.conf)
-                pdf_url = self.visual.input("Give pdf url to download")
-                file_path = getter.get_web_pdf(pdf_url, entry_id)
-                if file_path is None:
-                    self.visual.error("Failed to download from {}.".format(pdf_url))
-                    continue
-                updated_entry = self.get_editor().set_file(entry, file_path=file_path)
-                self.entry_collection.replace(updated_entry)
+                self.get_pdf_from_web(arg)
             # searching
             elif command.startswith(self.commands.search):
                 query = arg if arg else ""
@@ -432,15 +450,8 @@ class Runner:
                     entry = self.entry_collection.entries[entry_id]
                     pdf_in_entry = self.get_editor().open(entry)
                     if not pdf_in_entry and len(nums) == 1:
-                        # copy title to clipboard to help search for the pdf online
-                        # self.visual.print("Copied title to clipboard: {}".format(entry.title))
-                        # clipboard.copy(entry.title)
-                        # pdf_url_search = self.conf.pdf_searh
                         if self.visual.yes_no("Search for pdf in google scholar?"):
-                            breakpoint()
-                            pdf_path = self.get_getter().search_web_pdf(entry_id, entry.title)
-                            updated_entry = self.get_editor().set_file(entry, file_path=pdf_path)
-                            self.entry_collection.replace(updated_entry)
+                            self.search_web_pdf()
 
             # fetching from google scholar
             elif utils.matches(command, "get"):
@@ -471,6 +482,20 @@ class Runner:
                 self.reset_history()
                 self.cached_selection = [i + 1 for i in range(len(self.reference_entry_id_list)) if self.reference_entry_id_list[i] in read_entries_dict]
                 self.visual.print("Item is now selected: {}.".format(self.cached_selection))
+
+                # pdf
+                what = self.visual.input("Pdf?", "local url web-search *skip")
+                if utils.matches(what, "skip"):
+                    return
+                if utils.matches(what, "url"):
+                    self.get_pdf_from_web()
+                    continue
+                if utils.matches(what, "local"):
+                    self.set_local_pdf_path()
+                    continue
+                if utils.matches(what, "web-search"):
+                    self.search_web_pdf()
+
             # save collection
             elif utils.matches(command, self.commands.save):
                 self.save_if_modified(called_explicitely=True)
