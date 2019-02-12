@@ -53,6 +53,8 @@ def get_defaults(conf):
         "tag": "t"
     }
 
+    conf["browser"] = "chromium"
+    conf["pdf_search"] = "https://scholar.google.com/scholar?hl=en&q="
     conf["actions"] = ["merge", "inspect"]
     conf["visual"] = "default"
     conf["pdf_dir"] = join(dirname(conf.bib_path), "pdfs")

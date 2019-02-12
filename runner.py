@@ -20,6 +20,7 @@ class Runner:
         # assignments
         self.conf = conf
         self.editor = None
+        self.getter = None
         self.cached_selection = None
         self.has_stored_input = False
 
@@ -109,6 +110,12 @@ class Runner:
         # self.visual.print("Entry #[{}]".format(ones_idx))
         self.visual.print_entries_contents([self.entry_collection.entries[ID] for ID in ids])
         # self.visual.print_entry_contents(self.entry_collection.entries[ID])
+
+    # singleton getter fetcher
+    def get_getter(self):
+        if self.getter is None:
+            self.getter = Getter(self.conf)
+        return self.getter
 
     # singleton editor fetcher
     def get_editor(self):
@@ -296,8 +303,10 @@ class Runner:
             return
         modified_status = "*has been modified*" if self.modified_collection() else "has not been modified"
         if verify_write:
-            if not self.visual.yes_no("The collection {}. Overwrite?".format(modified_status), default_yes=False):
-                return
+            # for explicit calls, only ask for verification if it's NOT been modified
+            if called_explicitely and not self.modified_collection():
+                if not self.visual.yes_no("The collection {}. Overwrite?".format(modified_status), default_yes=False):
+                    return
         # write
         self.entry_collection.overwrite_file(self.conf)
         self.entry_collection.reset_modified()
@@ -358,9 +367,7 @@ class Runner:
                 citation = "\\cite{{{}}}".format(citation_id)
                 # clipboard.copy(citation_id)
                 clipboard.copy(citation)
-                self.visual.print("Copied to clipboard: {}".format(citation))
-                # self.visual.print("Copied to clipboard: {} and then {}".format(citation_id,
-                #                                                               citation))
+                self.visual.message("Copied to clipboard: {}".format(citation))
             # adding paths to pdfs
             elif command.startswith(self.commands.pdf_file):
                 nums = self.get_index_selection(arg)
@@ -421,15 +428,23 @@ class Runner:
                 if utils.has_none(nums):
                     self.visual.print("Need a valid entry index.")
                 for num in nums:
-                    entry = self.entry_collection.entries[self.reference_entry_id_list[num - 1]]
+                    entry_id = self.reference_entry_id_list[num - 1]
+                    entry = self.entry_collection.entries[entry_id]
                     pdf_in_entry = self.get_editor().open(entry)
                     if not pdf_in_entry and len(nums) == 1:
                         # copy title to clipboard to help search for the pdf online
-                        self.visual.print("Copied title to clipboard: {}".format(entry.title))
-                        clipboard.copy(entry.title)
+                        # self.visual.print("Copied title to clipboard: {}".format(entry.title))
+                        # clipboard.copy(entry.title)
+                        # pdf_url_search = self.conf.pdf_searh
+                        if self.visual.yes_no("Search for pdf in google scholar?"):
+                            breakpoint()
+                            pdf_path = self.get_getter().search_web_pdf(entry_id, entry.title)
+                            updated_entry = self.get_editor().set_file(entry, file_path=pdf_path)
+                            self.entry_collection.replace(updated_entry)
+
             # fetching from google scholar
             elif utils.matches(command, "get"):
-                getter = Getter(self.conf)
+                getter = self.get_getter()
                 if not arg:
                     self.visual.error("Need a query to get entry from the internet.")
                     continue

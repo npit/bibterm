@@ -6,7 +6,7 @@ from collections import namedtuple
 def matches(partial, full):
     if type(full) == list:
         for c in full:
-            if matches(c, full):
+            if matches(partial, c):
                 return True
         return False
     if not partial:

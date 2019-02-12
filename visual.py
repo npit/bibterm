@@ -252,6 +252,9 @@ class Io:
         for entry in entries:
             self.print_entry_contents(entry)
 
+    def pause(self, msg):
+        self.input(msg)
+
 
 class Blessed(Io):
     name = "blessed"
@@ -437,7 +440,7 @@ class Blessed(Io):
 
                 # show possible command matches from current string
                 if candidate_commands:
-                    self.message(" ".join(candidate_commands))
+                    info_msg = " ".join(candidate_commands)
                 else:
                     # no candidate commands -- check if it's a selection
                     if utils.is_index_list(inp) or self.selection_cache:

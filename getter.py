@@ -2,6 +2,8 @@ import gscholar
 from os.path import join
 from urllib.request import urlretrieve
 import visual
+import subprocess
+import clipboard
 
 
 class Getter:
@@ -28,3 +30,11 @@ class Getter:
         except Exception as ex:
             self.visual.error(ex)
             return None
+
+    def search_web_pdf(self, entry_id, entry_title):
+        url = self.conf.pdf_search + "+".join(entry_title.split())
+        prog = self.conf.browser
+        subprocess.run([prog, url])
+        self.visual.pause("Copy web pdf path and press enter to continue")
+        web_path = clipboard.paste()
+        return self.get_web_pdf(web_path, entry_id)
