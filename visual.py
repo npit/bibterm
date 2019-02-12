@@ -1,4 +1,5 @@
 import json
+import sys
 import utils
 from blessed import Terminal
 from fuzzywuzzy import fuzz
@@ -24,6 +25,9 @@ class Io:
     score_match_threshold = 50
     instance = None
     clear_size = 100
+    prompt = ">"
+
+    does_incremental_search = False
 
     def set_only_debug(self, val):
         self.only_debug = val
@@ -60,13 +64,20 @@ class Io:
         self.error(msg)
         exit(1)
 
-    def error(self, msg):
-        self.print("Error: {}".format(msg))
+    def log(self, msg):
+        self.print(msg)
 
-    def get_user_input(self, msg=None):
-        if msg is None:
-            return input()
-        return input(msg)
+    def message(self, msg):
+        self.print(msg)
+
+    def error(self, msg):
+        self.print("(!) {}".format(msg))
+
+    def receive_command(self):
+        return self.input()
+
+    def receive_search(self):
+        return True, self.input("Search:")
 
     def input_multichar(self, msg):
         return self.input(msg)
@@ -103,7 +114,7 @@ class Io:
                 msg += ": "
 
         while True:
-            ans = self.get_user_input(msg)
+            ans = input(msg)
             if options_str:
                 # default option on empty input
                 if not ans and default_idx is not None:
@@ -241,9 +252,12 @@ class Blessed(Io):
     term = None
     instance = None
     cursor_loc = None
+    search_cache = ""
+    does_incremental_search = True
 
     class states:
         command = "command"
+        search = "command"
     curren_state = None
 
     class positions:
@@ -252,6 +266,8 @@ class Blessed(Io):
 
     class layout:
         command = None
+        log = None
+        message = None
 
     def initialize_layout(self):
         # initialize positions
@@ -264,17 +280,22 @@ class Blessed(Io):
             layout = json.load(self.conf.layout)
             self.layout = utils.to_namedtuple(layout, 'layout')
         except:
-            self.layout.command = self.positions.upper_left
+            self.layout.command = self.positions.lower_left
+            self.layout.log = self.positions.upper_left
+            self.layout.message = (self.width // 3, self.height)
         self.curren_state = self.states.command
 
     def __init__(self, conf):
         self.conf = conf
         self.term = Terminal()
         self.width = self.term.width
-        self.height = self.term.height
+        self.height = self.term.height - 2
         self.initialize_layout()
         self.clear()
-        self.find_cursor()
+        self.data_start_line = 1
+        self.data_end_line = self.height - 1
+        self.search_cache = ""
+        # self.find_cursor()
 
     def find_cursor(self):
         # locations
@@ -283,6 +304,11 @@ class Blessed(Io):
     def get_cursor(self):
         # locations
         return self.term.get_location()
+
+    def log(self, msg):
+        self.clear_line(self.layout.log[1])
+        with self.term.location(*self.layout.log):
+            print(msg)
 
     def get_instance(conf=None):
         if Blessed.instance is not None:
@@ -294,24 +320,17 @@ class Blessed(Io):
         return Blessed.instance
 
     def print(self, msg, temp=False, no_newline=False):
+        if not msg:
+            return
         if self.only_debug and not self.do_debug:
             return
-        if no_newline:
-            # temp-print and move cursor to the end of the message
-            with self.term.location(self.x, self.y):
-                print(msg)
-            self.set_cursor(x=len(msg))
-        else:
-            print(self.term.normal, msg)
-        if not temp:
-            # update position
-            self.find_cursor()
+        print(self.term.normal, msg)
 
     def clear(self):
         print(self.term.clear())
 
-    def get_user_input(self, msg=None):
-        if msg is not None:
+    def get_single_char_input(self, msg=None):
+        if msg is not None and not msg:
             self.print(msg)
         with self.term.cbreak():
             return self.term.inkey()
@@ -319,6 +338,94 @@ class Blessed(Io):
     def get_position_by_state(self):
         if self.curren_state == self.states.command:
             return self.layout.command
+
+    def receive_search(self):
+        done = False
+        self.update_prompt_symbol("/")
+        self.clear_prompt()
+        x, y = self.layout.command
+        starting_x = 2
+        x += starting_x
+
+        # get_character
+        # sys.stderr.write("{} {} ".format(x, y))
+        c = self.get_single_char_input()
+        if c.is_sequence:
+            # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
+            if c.name == "KEY_DELETE":
+                self.clear_line(y, starting_x)
+                self.search_cache = self.search_cache[:-1]
+            if c.name == "KEY_ENTER":
+                self.search_cache = ""
+                done = True
+            if c.name == "KEY_ESCAPE":
+                self.search_cache = ""
+                done = None
+        else:
+            self.search_cache += c
+
+        # candidate_commands = [cmd for cmd in self.commands if utils.matches(inp, cmd)]
+        # for cmd in candidate_commands:
+        #     if cmd == inp:
+        #         self.clear_messages()
+        #         return cmd
+        # self.message(" ".join(candidate_commands))
+        self.temp_print(self.search_cache, x, y)
+        # self.temp_print("printed" + str(self.get_cursor()), x=30)
+        # self.temp_print(inp, x=30, y=self.y + 4)
+        self.move(0, self.data_start_line)
+        if done is False:
+            self.clear_data()
+        return done, self.search_cache
+
+    def receive_command(self):
+        inp = ""
+        x, y = self.layout.command
+        starting_x = 2
+        x += starting_x
+        done = False
+
+        while not done:
+            with self.term.cbreak():
+                # get_character
+                # sys.stderr.write("{} {} ".format(x, y))
+                c = self.get_single_char_input()
+                if c.is_sequence:
+                    # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
+                    if c.name == "KEY_DELETE":
+                        self.clear_line(y, starting_x)
+                        inp = inp[:-1]
+                    if c.name == "KEY_ENTER":
+                        break
+                else:
+                    inp += c
+
+                candidate_commands = [cmd for cmd in self.commands if utils.matches(inp, cmd)]
+                for cmd in candidate_commands:
+                    if cmd == inp:
+                        self.clear_messages()
+                        self.clear_prompt()
+                        return cmd
+                self.message(" ".join(candidate_commands))
+                self.temp_print(inp, x, y)
+                # self.temp_print("printed" + str(self.get_cursor()), x=30)
+                # self.temp_print(inp, x=30, y=self.y + 4)
+        self.clear_messages()
+        self.clear_prompt()
+        return inp
+
+    def clear_data(self):
+        for line in (range(self.data_start_line, self.data_end_line)):
+            self.clear_line(line)
+        self.move(0, self.data_start_line)
+
+
+    def clear_messages(self):
+        self.clear_line(self.layout.message[1], self.layout.message[0])
+
+    def message(self, msg):
+        self.clear_messages()
+        self.temp_print(msg, *self.layout.message)
 
     def input_multichar(self, msg=None):
         if msg is not None:
@@ -330,33 +437,54 @@ class Blessed(Io):
 
         inp = ""
         # set search prompt
-        self.set_prompt("/")
+        self.update_prompt_symbol("/")
+        x, y = self.layout.command
+        starting_x = 2
+        x += starting_x
         while True:
             with self.term.cbreak():
                 # c = self.term.inkey()
+                # sys.stderr.write("{} {} ".format(x, y))
                 c = self.get_user_input()
                 if c.is_sequence:
-                    self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
+                    # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
                     if c.name == "KEY_DELETE":
+                        self.clear_line(y, starting_x)
                         inp = inp[:-1]
                     if c.name == "KEY_ENTER":
                         break
                 else:
                     inp += c
 
-                self.temp_print(inp, clear_to_eol=True)
-                self.temp_print("printed" + str(self.get_cursor()), x=30)
-                self.temp_print(inp, x=30, y=self.y + 4)
+                self.temp_print(inp, x, y)
+                # self.temp_print("printed" + str(self.get_cursor()), x=30)
+                # self.temp_print(inp, x=30, y=self.y + 4)
         return inp
 
-    def set_prompt(self, prompt):
-        self.temp_print(prompt)
+
+    def update_prompt_symbol(self, prompt):
+        self.temp_print(prompt, *self.layout.command)
+
+    def clear_prompt(self):
+        self.clear_line(self.layout.command[1], self.layout.message[0])
+
+    def clear_line(self, line_num, start_x=0):
+        with self.term.location(start_x, line_num):
+            print(self.term.clear_eol())
+
+
+    def move(self, x, y):
+        print(self.term.move(x, y))
 
     def idle(self):
-        self.temp_print(">", x=0)
-        self.temp_print(":)", x=self.term.width - 3, y=self.y)
-        self.temp_print("loc:{}".format((self.x, self.y)), y=self.term.height - 1)
-        self.set_cursor(1, self.y)
+        # self.clear_data()
+
+        self.temp_print(self.prompt, *self.layout.command)
+        # self.temp_print(self.prompt, *self.layout.command)
+        # self.temp_print(self.prompt, *self.layout.command)
+        # self.temp_print(self.prompt, *self.layout.command)
+        self.term.move(0, 0)
+
 
     def set_cursor(self, x=None, y=None):
         if x is not None:
@@ -368,20 +496,57 @@ class Blessed(Io):
     def update_cursor(self):
         self.term.move(self.x, self.y)
 
-    def temp_print(self, msg, x=None, y=None, clear_to_eol=False):
-        if x is None:
-            x = self.x
-        if y is None:
-            y = self.y
+
+    def temp_print(self, msg, x, y):
+        # # skip the log line
+        # yy = y + 1
         # clear the line to its end
         with self.term.location(x, y):
-            if clear_to_eol:
-                print(self.term.clear_eol())
-            self.print(msg, temp=True)
+            # print("{} at {}, {}".format(msg, x, y))
+            print("{}".format(msg))
 
-    # def newline(self):
-    #     print()
+    def newline(self):
+        pass
 
+    # printing funcs, add data clearing
+    def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False):
+        self.clear_data()
+        Io.print_entries_enum(self, x_iter, entry_collection, at_most, additional_fields, print_newline)
+
+
+    def print_entry_contents(self, entry):
+        Io.print_entry_contents(self, entry)
     # def search(self, query, candidates, at_most):
     #     return process.extract(query, candidates, limit=at_most)
+
+    def error(self, msg):
+        self.message("(!) {}".format(msg))
+
+if __name__ == '__main__':
+    print("Do it.")
+    t = Terminal()
+    inp = ""
+    while True:
+        with t.cbreak():
+            # c = self.term.inkey()
+            # sys.stderr.write("{} {} ".format(x, y))
+            with t.cbreak():
+                c = t.inkey()
+            if c.is_sequence:
+                # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
+                if c.name == "KEY_DELETE":
+                    with t.location(2, 10):
+                        print(t.clear_eol())
+                    inp = inp[:-1]
+                if c.name == "KEY_ENTER":
+                    break
+            else:
+                inp += c
+
+            with t.location(2, 10):
+                print(inp)
+            # self.temp_print("printed" + str(self.get_cursor()), x=30)
+            # self.temp_print(inp, x=30, y=self.y + 4)
+
+
 

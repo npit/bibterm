@@ -518,7 +518,7 @@ class Reader:
     def read(self, input_file=None):
         if input_file is None:
             input_file = self.preprocess(self.bib_path)
-        self.visual.print("Reading from file {}.".format(input_file))
+        self.visual.log("Reading from file {}.".format(input_file))
         if not exists(input_file):
             self.visual.print("File {} does not exist.".format(input_file))
             exit(1)
@@ -527,7 +527,7 @@ class Reader:
             parser = BibTexParser()
             parser.customization = Reader.customizations
             db = bibtexparser.load(f, parser=parser)
-            self.visual.print("Loaded {} entries from file {}.".format(len(db.entries), self.bib_path))
+            self.visual.log("Loaded {} entries from file {}.".format(len(db.entries), self.bib_path))
         self.db = db
         self.entry_collection = self.load_collection(db)
 

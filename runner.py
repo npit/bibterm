@@ -19,7 +19,6 @@ class Runner:
     def __init__(self, conf, entry_collection=None):
         # assignments
         self.conf = conf
-        self.visual = setup(conf)
         self.editor = None
         self.cached_selection = None
         self.has_stored_input = False
@@ -48,43 +47,63 @@ class Runner:
         # history
         self.reset_history()
 
+        # ui
+        self.visual = setup(conf)
+        self.visual.commands = self.commands
+
+
     def search(self, query=None):
-        if query is None:
-            query = self.visual.input("Search:")
-        query = query.lower()
-        self.visual.print("Got query: {}".format(query))
-        results_ids, match_scores = [], []
-        # search all searchable fields
-        for field in self.searchable_fields:
-            res = self.filter(field, query)
-            ids, scores = [r[0] for r in res], [r[1] for r in res]
-            with utils.OnlyDebug(self.visual):
-                self.visual.print("Results for query: {} on field: {}".format(query, field))
-                self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids], self.entry_collection, additional_fields=list(map(str, scores)), print_newline=True)
+        search_done = False
+        just_began_search = True
+        query_supplied = bool(query)
+        search_results = None
+        while True:
+            # get new search object, if it's a continued search OR no pre-given query
+            if not just_began_search or (just_began_search and not query_supplied):
+                search_done, query = self.visual.receive_search()
+                if search_done is None:
+                    self.visual.message("Aborting search")
+                    return
+                if search_done:
+                    break
+            query = query.lower().strip()
+            self.visual.log("Got query: {}".format(query))
+            results_ids, match_scores = [], []
+            # search all searchable fields
+            for field in self.searchable_fields:
+                res = self.filter(field, query)
+                ids, scores = [r[0] for r in res], [r[1] for r in res]
+                with utils.OnlyDebug(self.visual):
+                    self.visual.print("Results for query: {} on field: {}".format(query, field))
+                    self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids], self.entry_collection, additional_fields=list(map(str, scores)), print_newline=True)
 
-            for i in range(len(ids)):
-                if ids[i] in results_ids:
-                    existing_idx = results_ids.index(ids[i])
-                    # replace score, if it's higher
-                    if scores[i] > match_scores[existing_idx]:
-                        match_scores[existing_idx] = scores[i]
-                else:
-                    # if not there, just append
-                    results_ids.append(ids[i])
-                    match_scores.append(scores[i])
+                for i in range(len(ids)):
+                    if ids[i] in results_ids:
+                        existing_idx = results_ids.index(ids[i])
+                        # replace score, if it's higher
+                        if scores[i] > match_scores[existing_idx]:
+                            match_scores[existing_idx] = scores[i]
+                    else:
+                        # if not there, just append
+                        results_ids.append(ids[i])
+                        match_scores.append(scores[i])
 
-        results_ids = sorted(zip(results_ids, match_scores), key=lambda x: x[1], reverse=True)
-        results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
+            results_ids = sorted(zip(results_ids, match_scores), key=lambda x: x[1], reverse=True)
+            results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
 
-        self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
+            self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
+            just_began_search = False
+            search_results = results_ids
+            if not self.visual.does_incremental_search:
+                break
+
+        # search done, push ref list
         self.push_reference_list(results_ids, command="{} {}".format(self.commands.search, query))
-        # while self.select_from_results(results_ids):
-        #     pass
 
     # print entry, only fields of interest
     def inspect_entry(self, ones_idx):
         if not isinstance(ones_idx, int) or ones_idx > len(self.reference_entry_id_list) or ones_idx < 1:
-            self.visual.print("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(self.reference_entry_id_list)))
+            self.visual.error("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(self.reference_entry_id_list)))
             return
         ID = self.reference_entry_id_list[ones_idx - 1]
         self.visual.print("Entry #[{}]".format(ones_idx))
@@ -239,7 +258,7 @@ class Runner:
         self.reference_history.append(new_list)
         self.reference_history_index += 1
         self.reference_entry_id_list = new_list
-        self.visual.print("Switching to new {}-long reference list.".format(len(self.reference_entry_id_list)))
+        self.visual.message("Switching to new {}-long reference list.".format(len(self.reference_entry_id_list)))
 
         # store the command that produced it
         self.command_history.append((len(self.reference_entry_id_list), command))
@@ -251,7 +270,7 @@ class Runner:
             input_cmd = None
         elif not self.has_stored_input:
             self.visual.idle()
-            user_input = self.visual.input()
+            user_input = self.visual.receive_command()
         else:
             user_input = self.get_stored_input()
         return user_input, input_cmd
@@ -317,7 +336,7 @@ class Runner:
                     continue
                 self.jump_history(idx - 1)
             elif command == self.commands.history_reset:
-                self.visual.print("Resetting history.")
+                self.visual.message("Resetting history.")
                 self.reset_history()
             elif command == self.commands.history_show:
                 self.show_history()
@@ -372,10 +391,11 @@ class Runner:
                 query = arg if arg else ""
                 if command == self.commands.search and not arg:
                     # search_prompt = "Enter search term(s):"
-                    query = self.visual.input_multichar()
+                    # query = self.visual.input_multichar()
+                    pass
                 else:
                     query = str(command[len(self.commands.search):]) + query
-                self.search(query.lower().strip())
+                self.search(query)
             # listing
             elif utils.matches(command, self.commands.list):
                 self.list(arg)

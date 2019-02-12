@@ -1,15 +1,17 @@
-import re
+import os
 from collections import namedtuple
 
 
 # check if s equals or is the start of opts or any of its elements
-def matches(s, opts):
-    if type(opts) == list:
-        for c in opts:
-            if matches(s, c):
+def matches(partial, full):
+    if type(full) == list:
+        for c in full:
+            if matches(c, full):
                 return True
         return False
-    return s and (s == opts or opts.startswith(s))
+    if not partial:
+        return False
+    return (partial == full or full.startswith(partial))
 
 
 def to_namedtuple(conf_dict, ntname):
@@ -21,7 +23,7 @@ def to_namedtuple(conf_dict, ntname):
 def is_index_list(inp):
     """Determine if the input has only slicable numeric list elements
     """
-    return all([x in [" ", ":"] or x.isdigit()  for x in inp])
+    return all([x in [" ", ":"] or x.isdigit() for x in inp])
 
 
 def get_index_list(inp, total_index_num, allow_slicing=True):
@@ -100,4 +102,3 @@ class OnlyDebug:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.visual.set_only_debug(False)
-
