@@ -252,7 +252,7 @@ class EntryCollection:
             title_first = re.sub('[^a-zA-Z]+', '', title_first)
             expected_id = "{}{}{}".format(authorname, year, title_first)
             if ID != expected_id:
-                if self.need_fix(ID, "id mismatch: {}".format(expected_id)):
+                if self.need_fix(ID, "expected id: {}".format(expected_id)):
                     # correct the citation id
                     self.fixes += 1
                     self.correct_id(ID, expected_id)
@@ -361,8 +361,10 @@ class EntryCollection:
 
     def stringify(self, value, key):
         joiner = " and " if key == "author" else ", "
-        value = joiner.join(value)
-        return re.sub("[{}]", "", value)
+        value = joiner.join(value).strip()
+        if value.endswith(","):
+            value = value[:-1]
+        return value.strip()
 
     def reset_modified(self):
         self.modified_collection = False

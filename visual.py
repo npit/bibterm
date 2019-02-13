@@ -7,12 +7,13 @@ from fuzzywuzzy import fuzz
 
 # base class to get and print stuff
 def setup(conf):
-    if conf.visual == Io.name:
+    visual_name = conf.visual
+    if visual_name == Io.name:
         return Io.get_instance(conf)
-    elif conf.visual == Blessed.name:
+    elif visual_name == Blessed.name:
         return Blessed.get_instance(conf)
     else:
-        print("Undefined IO config:", conf.io)
+        print("Undefined ui config:", visual_name)
         exit(1)
 
 
@@ -74,22 +75,19 @@ class Io:
         self.print("(!) {}".format(msg))
 
     def receive_command(self):
-        return self.input()
+        return self.ask_user()
 
     def receive_search(self):
-        return True, self.input("Search:")
-
-    def input_multichar(self, msg):
-        return self.input(msg)
+        return True, self.ask_user("Search:")
 
     def yes_no(self, msg, default_yes=True):
         opts = "*yes no" if default_yes else "yes *no"
-        what = self.input(msg, opts)
+        what = self.ask_user(msg, opts)
         if what is None:
             return what
         return utils.matches(what, "yes")
 
-    def get_raw_input(msg):
+    def get_raw_input(self, msg):
         return input(msg)
 
     def generate_user_responses(self, msg, options_str):
@@ -121,7 +119,7 @@ class Io:
         return msg, opts, opt_print, default_option_idx
 
     # func to show choices. Bang options are explicit and are not edited
-    def ask_user(self, msg="", options_str=None, check=True):
+    def ask_user(self, msg="", options_str=None, check=True, multichar=True):
         msg, opts, opt_print, default_option_idx = self.generate_user_responses(msg, options_str)
         while True:
             ans = self.get_raw_input(msg)
@@ -267,7 +265,6 @@ class Io:
     def pause(self, msg):
         self.input(msg)
 
-    
 
 
 class Blessed(Io):
@@ -366,7 +363,6 @@ class Blessed(Io):
             # restrict to size
             buffer_to_print = "\n".join(self.data_buffer[-self.data_buffer_size:])
             print(self.term.normal, buffer_to_print)
-            # breakpoint()
         else:
             print(self.term.normal, msg)
 
@@ -586,6 +582,11 @@ class Blessed(Io):
         self.clear_data()
         with self.term.location(0, self.data_start_line):
             Io.print_entries_contents(self, entries, printing_multiple_entries=True)
+
+    def print_enum(self, x_iter, at_most=None, additionals=None):
+        self.clear_data()
+        with self.term.location(0, self.data_start_line):
+            Io.print_enum(self, x_iter, at_most, additionals)
 
     def error(self, msg):
         self.message("(!) {}".format(msg))

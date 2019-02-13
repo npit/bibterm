@@ -60,12 +60,13 @@ class Runner:
         while True:
             # get new search object, if it's a continued search OR no pre-given query
             if not just_began_search or (just_began_search and not query_supplied):
-                search_done, query = self.visual.receive_search()
+                search_done, new_query = self.visual.receive_search()
                 if search_done is None:
                     self.visual.message("Aborting search")
                     return
                 if search_done:
                     break
+                query = new_query
             query = query.lower().strip()
             self.visual.log("Got query: {}".format(query))
             results_ids, match_scores = [], []
@@ -74,7 +75,7 @@ class Runner:
                 res = self.filter(field, query)
                 ids, scores = [r[0] for r in res], [r[1] for r in res]
                 with utils.OnlyDebug(self.visual):
-                    self.visual.log("Results for query: {} on field: {}".format(query, field))
+                    self.visual.debug("Results for query: {} on field: {}".format(query, field))
                     self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids], self.entry_collection, additional_fields=list(map(str, scores)), print_newline=True)
 
                 for i in range(len(ids)):
@@ -95,9 +96,7 @@ class Runner:
             just_began_search = False
             if not self.visual.does_incremental_search:
                 break
-
-        # search done, push ref list
-        self.push_reference_list(results_ids, command="{} {}".format(self.commands.search, query))
+        self.latest_list_modification = (results_ids, "search:\"{}\"".format(query))
 
     # print entry, only fields of interest
     def inspect_entries(self, ones_idxs):
@@ -143,9 +142,9 @@ class Runner:
         if nums is None:
             self.visual.log("Invalid selection: {}".format(inp))
             return
+        self.visual.log("Displaying {} {}: {}".format(len(nums), "entry" if len(nums) == 1 else "entries", nums))
         self.inspect_entries(nums)
         self.cached_selection = nums
-        self.visual.log("Displaying {} {}: {}".format(len(nums), "entry" if len(nums) == 1 else "entries", nums))
 
     def get_stored_input(self):
         self.has_stored_input = False
@@ -160,14 +159,11 @@ class Runner:
                     self.visual.error("Reference is already {}-long.".format(len(self.reference_entry_id_list)))
                     return
                 show_list = self.reference_entry_id_list[:int(arg)]
+                if len(show_list) < len(self.reference_entry_id_list):
+                    self.latest_list_modification = (self.results_ids, "{} {}".format(self.commands.list, len(show_list)))
             else:
                 self.visual.error("Undefined list argument: {}".format(arg))
         self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.max_list)
-        if len(show_list) < len(self.reference_entry_id_list):
-            self.push_reference_list(show_list, command="{} {}".format(self.commands.list, len(show_list)))
-        # self.visual.newline()
-        # while self.select_from_results(self.entry_collection.id_list):
-        #     pass
 
     def is_multivalue_key(self, filter_key):
         return filter_key in self.multivalue_keys
@@ -233,6 +229,7 @@ class Runner:
         self.reference_history = [self.entry_collection.id_list]
         self.command_history = [(len(self.entry_collection.id_list), "<start>")]
         self.reference_history_index = 0
+        self.latest_list_modification = None
 
     # move the reference list wrt stored history
     def step_history(self, n_steps):
@@ -249,7 +246,7 @@ class Runner:
             switch_msg = "backwards"
         self.reference_history_index += n_steps
         self.reference_entry_id_list = self.reference_history[self.reference_history_index]
-        self.visual.print("Switched {} to {}-long reference list.".format(switch_msg, len(self.reference_entry_id_list)))
+        self.visual.log("Switched {} to {}-long reference list: {}.".format(switch_msg, len(self.reference_entry_id_list), self.command_history[self.reference_history_index]))
         self.list()
 
     def show_history(self):
@@ -257,6 +254,17 @@ class Runner:
         current_mark[self.reference_history_index] = "*"
         self.visual.print_enum(self.command_history, additionals=current_mark)
         self.visual.debug("History length: {}, history lengths: {}, current index: {}, current length: {}.".format(len(self.reference_history), [len(x) for x in self.reference_history], self.reference_history_index, len(self.reference_entry_id_list)))
+
+    def change_history(self):
+        """Change the reference list to its to its latest modificdation
+
+        Calling the function after a search or a truncated list, will set the reference list to the resulting entry set.
+        """
+        if self.latest_list_modification is None:
+            self.visual.log("No modification has been applied.")
+            return
+        self.visual.log("Changed reference list to [{}], with {} items.".format(self.latest_list_modification[1], len(self.latest_list_modification[0])))
+        self.push_reference_list(*self.latest_list_modification)
 
     # add to reference list history
     def push_reference_list(self, new_list, command):
@@ -278,7 +286,6 @@ class Runner:
             self.visual.debug("Got input from main: [{}]".format(input_cmd))
             input_cmd = None
         elif not self.has_stored_input:
-            self.visual.idle()
             user_input = self.visual.receive_command()
         else:
             user_input = self.get_stored_input()
@@ -402,6 +409,8 @@ class Runner:
                 self.reset_history()
             elif command == self.commands.history_show:
                 self.show_history()
+            elif command == self.commands.history_change:
+                self.change_history()
             # -------------------------------------------------------
             elif command == self.commands.delete:
                 nums = self.get_index_selection(arg)
@@ -509,7 +518,7 @@ class Runner:
                 # pdf
                 what = self.visual.ask_user("Pdf?", "local url web-search *skip")
                 if utils.matches(what, "skip"):
-                    return
+                    continue
                 if utils.matches(what, "url"):
                     self.get_pdf_from_web()
                     continue

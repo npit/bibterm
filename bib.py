@@ -54,9 +54,13 @@ def main():
     parser = argparse.ArgumentParser(description="\n".join(help_str))
     parser.add_argument("actions", nargs="*", help="Available: {}".format(", ".join(conf_dict["actions"])))
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode.")
+    parser.add_argument("-u", "--ui", dest="ui", help="Override user interface type.")
     parser_args = parser.parse_args()
 
     conf_dict["debug"] = parser_args.debug
+    if parser_args.ui is not None:
+        conf_dict["visual"] = parser_args.ui
+
     conf = to_namedtuple(conf_dict, "conf")
     vis = visual.setup(conf)
     runner, input_cmd = None, None

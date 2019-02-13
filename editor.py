@@ -19,7 +19,6 @@ class Editor:
 
     def get_raw_input(self, msg):
         self.cache = self.visual.ask_user(msg, multichar=True)
-        breakpoint()
         return self.cache
 
     def get_input(self, msg):

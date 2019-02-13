@@ -50,6 +50,7 @@ def get_defaults(conf):
         "history_jump": "hj",
         "history_back": "hb",
         "history_forward": "hf",
+        "history_change": "hc",
         "tag": "t"
     }
 
