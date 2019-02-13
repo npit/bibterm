@@ -394,17 +394,23 @@ class Blessed(Io):
         # get_character
         # sys.stderr.write("{} {} ".format(x, y))
         c = self.get_raw_input()
+        a = c
+        breakpoint()
+        self.message("Key:" + c)
         if c.is_sequence:
             # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
             if c.name == "KEY_DELETE":
                 self.clear_line(y, starting_x)
                 self.search_cache = self.search_cache[:-1]
-            if c.name == "KEY_ENTER":
+            elif c.name == "KEY_ENTER":
                 self.search_cache = ""
                 done = True
-            if c.name == "KEY_ESCAPE":
+            elif c.name == "KEY_ESCAPE":
                 self.search_cache = ""
                 done = None
+            else:
+                self.message("Unhandled metakey:" + c.name)
+                breakpoint()
         else:
             self.search_cache += c
 
@@ -581,7 +587,7 @@ class Blessed(Io):
     def print_entries_contents(self, entries):
         self.clear_data()
         with self.term.location(0, self.data_start_line):
-            Io.print_entries_contents(self, entries, printing_multiple_entries=True)
+            Io.print_entries_contents(self, entries)
 
     def print_enum(self, x_iter, at_most=None, additionals=None):
         self.clear_data()

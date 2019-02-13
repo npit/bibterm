@@ -503,8 +503,7 @@ class Runner:
                 reader2.read_string(res)
                 read_entries_dict = reader2.get_entry_collection().entries
                 self.visual.log("Retrieved entry item(s):")
-                for entry in read_entries_dict.values():
-                    self.visual.print_entry_contents(entry)
+                self.visual.print_entries_contents(read_entries_dict.values())
                 if not self.visual.yes_no("Store?"):
                     continue
                 for entry in read_entries_dict.values():

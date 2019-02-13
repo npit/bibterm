@@ -51,23 +51,25 @@ class Writer:
             self.visual.print("Nothing left to merge.")
             return None
         # insert them
-        self.visual.print("Proceeding to insert {} entries:".format(len(ids_to_insert)))
-        for i, ID in enumerate(ids_to_insert):
-            entry = other_collection.entries[ID]
-            strs = self.visual.gen_entry_enum_strings(entry, other_collection.maxlens(ids_to_insert), i + 1, len(ids_to_insert))
-            self.visual.print("Inserting {} {} {}".format(*strs))
-            entry_collection.create(entry)
+        if ids_to_insert:
+            self.visual.print("Proceeding to insert {} entries:".format(len(ids_to_insert)))
+            for i, ID in enumerate(ids_to_insert):
+                entry = other_collection.entries[ID]
+                strs = self.visual.gen_entry_enum_strings(entry, other_collection.maxlens(ids_to_insert), i + 1, len(ids_to_insert))
+                self.visual.print("Inserting {} {} {}".format(*strs))
+                entry_collection.create(entry)
 
-        self.visual.print("Proceeding to replace {} entries:".format(len(ids_to_replace)))
-        for i, ID in enumerate(ids_to_replace):
-            entry = other_collection.entries[ID]
-            strs = self.visual.gen_entry_enum_strings(entry, other_collection, i + 1, len(ids_to_insert))
-            self.visual.print("Inserting {} {} {}".format(*strs))
-            entry_collection.replace(entry)
+        if ids_to_replace:
+            self.visual.print("Proceeding to replace {} entries:".format(len(ids_to_replace)))
+            for i, ID in enumerate(ids_to_replace):
+                entry = other_collection.entries[ID]
+                strs = self.visual.gen_entry_enum_strings(entry, other_collection, i + 1, len(ids_to_insert))
+                self.visual.print("Inserting {} {} {}".format(*strs))
+                entry_collection.replace(entry)
         return entry_collection
 
     def write(self, entry_collection):
-        self.visual.print("Writing {} items to {}".format(len(entry_collection.bibtex_db.entries), self.bib_path))
+        self.visual.log("Writing {} items to {}".format(len(entry_collection.bibtex_db.entries), self.bib_path))
         with open(self.bib_path, "w") as f:
             bibtexparser.dump(entry_collection.get_writable_db(), f)
 
