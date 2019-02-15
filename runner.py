@@ -64,7 +64,8 @@ class Runner:
                 if search_done is None:
                     self.visual.message("Aborting search")
                     return
-                if search_done:
+                if new_query == "":
+                    # pressed enter
                     break
                 query = new_query
             query = query.lower().strip()
@@ -97,6 +98,8 @@ class Runner:
             if not self.visual.does_incremental_search:
                 break
         self.latest_list_modification = (results_ids, "search:\"{}\"".format(query))
+        # push the modification to make 
+        self.change_history()
 
     # print entry, only fields of interest
     def inspect_entries(self, ones_idxs):
@@ -160,7 +163,7 @@ class Runner:
                     return
                 show_list = self.reference_entry_id_list[:int(arg)]
                 if len(show_list) < len(self.reference_entry_id_list):
-                    self.latest_list_modification = (self.results_ids, "{} {}".format(self.commands.list, len(show_list)))
+                    self.latest_list_modification = (show_list, "{} {}".format(self.commands.list, len(show_list)))
             else:
                 self.visual.error("Undefined list argument: {}".format(arg))
         self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.max_list)
@@ -354,7 +357,7 @@ class Runner:
         updated_entry = self.get_editor().set_file(entry, file_path=file_path)
         self.entry_collection.replace(updated_entry)
 
-    def search_pdf_external_browser(self, str_selection=None):
+    def search_web_pdf(self, str_selection=None):
         nums = self.get_index_selection(str_selection)
         if nums is None or not nums or len(nums) > 1:
             self.visual.error("Need a single selection to download pdf to.")
@@ -439,7 +442,7 @@ class Runner:
                 self.get_pdf_from_web(arg)
             # searching for a pdf in an external browser
             elif command == self.commands.pdf_search:
-                self.search_pdf_external_browser(arg)
+                self.search_web_pdf(arg)
             # searching
             elif command.startswith(self.commands.search):
                 query = arg if arg else ""

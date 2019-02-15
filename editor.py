@@ -2,7 +2,6 @@ from visual import setup
 import utils
 import os
 
-
 class Editor:
 
     def __init__(self, conf):
@@ -10,8 +9,10 @@ class Editor:
         self.visual = setup(conf)
         self.collection_modified = False
         self.clear_cache()
-        self.pdf_dir = os.path.join(os.path.dirname(self.conf.bib_path), "pdfs")
-        self.pdf_dir = conf.pdf_dir
+        if conf.pdf_dir is None:
+            self.pdf_dir = os.path.join(os.path.dirname(self.conf.bib_path), "pdfs")
+        else:
+            self.pdf_dir = conf.pdf_dir
 
     def clear_cache(self):
         self.cache = None
@@ -53,10 +54,18 @@ class Editor:
         self.visual.log("About to insert pdf file to [{}]".format(entry.ID))
         if file_path is None:
             file_path = self.get_input("File path")
+            while not os.path.exists(file_path) and self.visual.yes_no("No file is at that path. Re-enter?", default_yes=False):
+                file_path = self.get_input("File path")
         if not file_path:
             self.visual.debug("Ignoring empty file path.")
             return None
-        entry.set_file(file_path)
+
+        if self.make_canonic_pdf_name(file_path, entry):
+            # fix and set canonic path
+            pass
+        else:
+            # path already canonic
+            entry.set_file(file_path)
         self.collection_modified = True
         return entry
 
@@ -84,8 +93,34 @@ class Editor:
             return False
         file_path = utils.fix_file_path(entry.file, self.pdf_dir)
         if os.path.exists(file_path):
+            self.make_canonic_pdf_name(file_path, entry)
             self.visual.print("Opening: {}".format(file_path))
             os.system("/usr/bin/xdg-open '{}'".format(file_path))
         else:
             self.visual.error("Entry file path does not exist: {}".format(file_path))
         return True
+
+
+    def fix_file_path(path, pdf_dir=None):
+        if path.endswith(":pdf"):
+            path = path[:-4]
+        if path.startswith(":home"):
+            path = "/" + path[1:]
+        if pdf_dir is not None and not os.path.isabs(path):
+            if not path.startswith("/home"):
+                path = os.path.join(pdf_dir, path)
+        return path
+
+    def get_entry_canonic_pdf_path(self, entry):
+        return os.path.join(self.pdf_dir, entry.ID + ".pdf")
+
+    def make_canonic_pdf_name(self, file_path, entry):
+        proper_path = self.get_entry_canonic_pdf_path(entry)
+        if proper_path != file_path:
+            if self.visual.yes_no("File path {} differs from the proper one: {} -- rename & move?".format(file_path, proper_path)):
+                breakpoint()
+                os.rename(file_path, proper_path)
+                self.visual.log("Renamed {} to {} -- rename?".format(file_path, proper_path))
+                self.set_file(entry, proper_path)
+                return True
+        return False

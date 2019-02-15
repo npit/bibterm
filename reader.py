@@ -44,7 +44,7 @@ class EntryCollection:
         all_ids = [x["ID"] for x in bib_db.entries]
         duplicates = [item for item, count in collections.Counter(all_ids).items() if count > 1]
         if duplicates:
-            self.visual.error("{} duplicates found and need fixing:\n{}\n Fix them,bye!".format(len(duplicates), "\n".join(duplicates)))
+            self.visual.error("{} duplicates found in the collection - fix them.\n{}".format(len(duplicates), "\n".join(duplicates)))
             exit(1)
 
         for i in range(len(bib_db.entries)):
@@ -269,7 +269,7 @@ class EntryCollection:
                     self.bibtex_db.entries[i]["keywords"] = kw_str
         # fix title
         if title != title.strip() or title.strip()[-1] == ".":
-            if self.need_fix(ID, "title artifacts"):
+            if self.need_fix(ID, "title artifacts: '{}'".format(title)):
                 # make the correct title
                 title = title.strip()
                 if title[-1] == ".":
@@ -543,17 +543,13 @@ class Reader:
         updated_tags = self.entry_collection.get_tag_information()
         if updated_tags != self.tags_info:
             self.tags_info = updated_tags
-            what = self.visual.yes_no("Write updated tags to the original file: {}?".format(self.tags_path), default_yes=False)
-            if utils.matches(what, "yes"):
+            if self.visual.yes_no("Write updated tags to the original file: {}?".format(self.tags_path), default_yes=False):
                 with open(self.tags_path, "w") as f:
                     f.write(json.dumps(updated_tags, indent=4, sort_keys=True))
 
         if self.entry_collection.entries_fixed > 0:
             self.visual.message("Applied a total of {} fixes to {} entries.".format(self.entry_collection.fixes, self.entry_collection.entries_fixed))
-            what = self.visual.yes_no("Write fixes to the original source file: {}?".format(self.bib_path), default_yes=False)
-            if utils.matches(what, "no"):
-                pass
-            else:
+            if self.visual.yes_no("Write fixes to the original source file: {}?".format(self.bib_path), default_yes=False):
                 self.entry_collection.overwrite_file(self.conf)
 
     def get_entry_collection(self):

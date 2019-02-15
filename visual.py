@@ -3,6 +3,7 @@ import sys
 import utils
 from blessed import Terminal
 from fuzzywuzzy import fuzz
+import clipboard
 
 
 # base class to get and print stuff
@@ -250,7 +251,9 @@ class Io:
     def print_entry_contents(self, entry):
         if self.only_debug and not self.do_debug:
             return
-        st = json.dumps(entry.get_pretty_dict(), indent=2)
+        if type(entry) != dict:
+            entry = entry.get_pretty_dict()
+        st = json.dumps(entry, indent=2)
         # remove enclosing {}
         st = " " + st.strip()[1:-1].strip()
         self.print(st)
@@ -263,7 +266,7 @@ class Io:
             self.print_entry_contents(entry)
 
     def pause(self, msg):
-        self.input(msg)
+        self.ask_user(msg)
 
 
 
@@ -275,6 +278,16 @@ class Blessed(Io):
     selection_cache = ""
     does_incremental_search = True
     message_buffer_size = None
+    printing_multiple_entries = None
+
+    # metakey handling (e.g. C-V)
+    key_codes = {'\x16': ('C-V', lambda x: clipboard.paste())
+                 }
+
+    def get_metakey(self, key):
+        if key in self.key_codes:
+            return self.key_codes[key]
+        return None
 
     class states:
         command = "command"
@@ -306,6 +319,7 @@ class Blessed(Io):
             self.layout.command = self.positions.lower_left
             self.layout.log = self.positions.upper_left
             self.layout.message = (self.width // 3, self.height)
+            self.layout.debug = (self.width // 3, self.height - 1)
             self.layout.large_message = (2 * self.width // 3, 1)
 
             self.command_buffer_size = self.layout.message[0] - 1
@@ -327,6 +341,7 @@ class Blessed(Io):
         self.search_cache = ""
         self.prompt_in_use = False
         self.data_buffer = []
+        printing_multiple_entries = False
 
     def log(self, msg):
         self.clear_line(self.layout.log[1])
@@ -347,6 +362,7 @@ class Blessed(Io):
             return
         if self.only_debug and not self.do_debug:
             return
+
         if use_buffer:
             self.clear_data()
             if not msg:
@@ -365,7 +381,6 @@ class Blessed(Io):
             print(self.term.normal, buffer_to_print)
         else:
             print(self.term.normal, msg)
-
 
     def clear(self):
         print(self.term.clear())
@@ -392,35 +407,17 @@ class Blessed(Io):
         x += starting_x
 
         # get_character
-        # sys.stderr.write("{} {} ".format(x, y))
-        c = self.get_raw_input()
-        a = c
-        breakpoint()
-        self.message("Key:" + c)
-        if c.is_sequence:
-            # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
-            if c.name == "KEY_DELETE":
-                self.clear_line(y, starting_x)
-                self.search_cache = self.search_cache[:-1]
-            elif c.name == "KEY_ENTER":
-                self.search_cache = ""
-                done = True
-            elif c.name == "KEY_ESCAPE":
-                self.search_cache = ""
-                done = None
-            else:
-                self.message("Unhandled metakey:" + c.name)
-                breakpoint()
+        key = self.input_multichar(x, y, single_char=True, initial_entry=self.search_cache)
+        # enter
+        if key == self.search_cache:
+            done = True
+            self.search_cache = ""
+        elif key is None:
+            done = None
+            self.search_cache = ""
         else:
-            self.search_cache += c
-
-        # candidate_commands = [cmd for cmd in self.commands if utils.matches(inp, cmd)]
-        # for cmd in candidate_commands:
-        #     if cmd == inp:
-        #         self.clear_messages()
-        #         return cmd
-        # self.message(" ".join(candidate_commands))
-        self.temp_print(self.search_cache, x, y)
+            self.search_cache = key
+        # self.temp_print(self.search_cache, x, y)
         # self.temp_print(inp, x=30, y=self.y + 4)
         self.move(0, self.data_start_line)
         if done is False:
@@ -436,71 +433,85 @@ class Blessed(Io):
 
         inp = self.selection_cache
         while not done:
-            with self.term.cbreak():
-                # get_character
-                c = self.get_raw_input()
-                if c.is_sequence:
-                    if c.name == "KEY_DELETE":
-                        self.clear_line(y, starting_x)
-                        inp = inp[:-1]
-                    elif c.name == "KEY_ENTER":
-                        command = inp
-                        self.selection_cache = ""
-                        self.prompt_in_use = False
-                        break
-                    elif c.name == "KEY_ESCAPE":
-                        # clear selection cache
-                        self.selection_cache = ""
-                        self.prompt_in_use = False
-                        command = ""
-                        break
-                    else:
-                        self.message("Got metakey: {}".format(c.name))
-                        continue
-                else:
-                    inp += c
+            # get_character
+            new_inp = self.input_multichar(starting_x, y, single_char=True, initial_entry=inp)
+            # esc
+            if new_inp is None:
+                self.selection_cache = ""
+                self.prompt_in_use = False
+                command = None
+                break
+            # enter
+            if new_inp == inp:
+                self.selection_cache = ""
+                self.prompt_in_use = False
+                command = inp
+                break
+            inp = new_inp
+            self.debug_message("Sel. cache: [{}]".format(self.selection_cache))
+            # c = self.get_raw_input()
+            # if c.is_sequence:
+            #     if c.name == "KEY_DELETE":
+            #         self.clear_line(y, starting_x)
+            #         inp = inp[:-1]
+            #     elif c.name == "KEY_ENTER":
+            #         command = inp
+            #         self.selection_cache = ""
+            #         self.prompt_in_use = False
+            #         break
+            #     elif c.name == "KEY_ESCAPE":
+            #         # clear selection cache
+            #         self.selection_cache = ""
+            #         self.prompt_in_use = False
+            #         command = ""
+            #         break
+            #     else:
+            #         self.message("Got metakey: {}".format(c.name))
+            #         continue
+            # else:
+            #     inp += c
 
-                # check for command match
-                candidate_commands = self.get_candidate_commands(inp)
-                exact_match = [inp == c for c in candidate_commands]
-                if any(exact_match):
-                    command = [candidate_commands[i] for i in range(len(exact_match)) if exact_match[i]][0]
-                    command_name = [k for k in self.commands if self.commands[k] == command][0]
-                    info_msg = "command: " + command_name
-                    # display and break
-                    self.temp_print(inp, x, y)
-                    break
-
-                # show possible command matches from current string
-                if candidate_commands:
-                    info_msg = " ".join(candidate_commands)
-                else:
-                    # no candidate commands -- check if it's a selection
-                    if utils.is_index_list(inp) or self.selection_cache:
-                        if not utils.is_valid_index_list(inp):
-                            info_msg = "invalid selection"
-                        else:
-                            self.prompt_in_use = True
-                            info_msg = "selection"
-                            # if there's a cache, update it
-                            self.selection_cache = inp
-                            command = inp
-                            # display and break
-                            self.temp_print(inp, x, y)
-                            break
-                    else:
-                        # invalid input: show suggestions starting from the last  valid sequence
-                        # shave off that last invalid char
-                        inp = inp[:-1]
-                        if not inp:
-                            info_msg = "Candidate commands: {}".format(" ".join(self.commands.values()))
-                        else:
-                            info_msg = "Candidate commands: {}".format(" ".join(self.get_candidate_commands(inp)))
-                        self.message(info_msg)
-
-                # show current entry
+            # check for command match
+            candidate_commands = self.get_candidate_commands(inp)
+            exact_match = [inp == c for c in candidate_commands]
+            if any(exact_match):
+                command = [candidate_commands[i] for i in range(len(exact_match)) if exact_match[i]][0]
+                command_name = [k for k in self.commands if self.commands[k] == command][0]
+                info_msg = "command: " + command_name
+                # display and break
                 self.temp_print(inp, x, y)
-                self.message(info_msg)
+                break
+
+            # show possible command matches from current string
+            if candidate_commands:
+                info_msg = " ".join(candidate_commands)
+            else:
+                # no candidate commands -- check if it's a selection
+                if utils.is_index_list(inp) or self.selection_cache:
+                    if not utils.is_valid_index_list(inp):
+                        info_msg = "invalid selection"
+                    else:
+                        self.prompt_in_use = True
+                        info_msg = "selection"
+                        # if there's a cache, update it
+                        self.selection_cache = inp
+                        command = inp
+                        # display and break
+                        self.temp_print(inp, x, y)
+                        break
+                else:
+                    # invalid input: show suggestions starting from the last  valid sequence
+                    # shave off that last invalid char
+                    inp = inp[:-1]
+                    if not inp:
+                        info_msg = "Candidate commands: {}".format(" ".join(self.commands.values()))
+                    else:
+                        info_msg = "Candidate commands: {}".format(" ".join(self.get_candidate_commands(inp)))
+                    self.message(info_msg)
+
+            # show current entry
+            self.temp_print(inp, x, y)
+            self.message(info_msg)
 
         self.clear_prompt()
         if self.selection_cache:
@@ -564,6 +575,11 @@ class Blessed(Io):
             # print("{} at {}, {}".format(msg, x, y))
             print("{}".format(msg))
 
+    def debug_message(self, msg):
+        # if self.only_debug and not self.do_debug:
+        #     return
+        self.temp_print("debug: " + msg, *self.layout.debug)
+
     def newline(self):
         pass
 
@@ -574,20 +590,20 @@ class Blessed(Io):
             Io.print_entries_enum(self, x_iter, entry_collection, at_most, additional_fields, print_newline)
 
 
-    def print_entry_contents(self, entry, printing_multiple_entries=False):
-        # self.clear_data()
-        if not printing_multiple_entries:
+    def print_entry_contents(self, entry):
+        if not self.printing_multiple_entries:
+            self.clear_data()
             with self.term.location(0, self.data_start_line):
                 Io.print_entry_contents(self, entry)
         else:
             Io.print_entry_contents(self, entry)
-    # def search(self, query, candidates, at_most):
-    #     return process.extract(query, candidates, limit=at_most)
 
     def print_entries_contents(self, entries):
+        self.printing_multiple_entries = True
         self.clear_data()
         with self.term.location(0, self.data_start_line):
             Io.print_entries_contents(self, entries)
+        self.printing_multiple_entries = False
 
     def print_enum(self, x_iter, at_most=None, additionals=None):
         self.clear_data()
@@ -632,26 +648,41 @@ class Blessed(Io):
             # valid or no-option input
             return ans
 
-    def input_multichar(self, x, y):
+    def input_multichar(self, x, y, single_char=False, initial_entry=None):
         """Input function that requres termination with RET or ESC
         """
-        res = ""
+        if initial_entry is not None:
+            res = initial_entry
+        else:
+            res = ""
         done = False
         while not done:
             key = self.get_raw_input()
-            if key.is_sequence:
-                # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
+            if self.get_metakey(key):
+                # metakey handling
+                name, func = self.get_metakey(key)
+                self.debug_message("Metakey: {}".format(name))
+                res += func(key)
+            elif key.is_sequence:
+                # blessed sequence key
                 if key.name == "KEY_DELETE":
                     self.clear_line(y, x)
                     res = res[:-1]
                 if key.name == "KEY_ENTER":
+                    # on enter, we're done
                     done = True
                 if key.name == "KEY_ESCAPE":
+                    # on escape, return nothing
                     res = None
                     done = True
             else:
+                # regular input
                 res += key
+            # print current entry
             self.temp_print(res, x, y)
+            # for single-char mode, return immediately
+            if single_char:
+                break
         return res
 
 

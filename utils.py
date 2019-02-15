@@ -97,16 +97,6 @@ def has_none(inp):
     return inp is None or any([x is None for x in inp])
 
 
-def fix_file_path(path, pdf_dir=None):
-    if path.endswith(":pdf"):
-        path = path[:-4]
-    if path.startswith(":home"):
-        path = "/" + path[1:]
-    if pdf_dir is not None:
-        if not path.startswith("/home"):
-            path = os.path.join(pdf_dir, path)
-    return path
-
 
 # debug with statement for visual
 class OnlyDebug:
