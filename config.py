@@ -36,6 +36,7 @@ def get_defaults(conf):
         "search": "/",
         "list": "l",
         "clear": "",
+        "unselect": "us",
         "delete": "del",
         "repeat": "r",
         "show": "sh",
@@ -51,8 +52,10 @@ def get_defaults(conf):
         "history_back": "hb",
         "history_forward": "hf",
         "history_change": "hc",
-        "tag": "t"
+        "tag": "t",
     }
+    # controls that can act on selection(s)
+    conf["selection_commands"] = ["list", "delete", "cite", "tag", "pdf_file", "pdf_web", "pdf_open"]
 
     conf["browser"] = "chromium"
     conf["pdf_search"] = "https://scholar.google.com/scholar?hl=en&q="

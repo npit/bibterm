@@ -91,17 +91,17 @@ class Editor:
         if not entry.has_file():
             self.visual.error("No file field in entry {}".format(entry.ID))
             return False
-        file_path = utils.fix_file_path(entry.file, self.pdf_dir)
+        file_path = self.fix_file_path(entry.file, self.pdf_dir)
         if os.path.exists(file_path):
-            self.make_canonic_pdf_name(file_path, entry)
+            if self.make_canonic_pdf_name(file_path, entry):
+                file_path = self.get_entry_canonic_pdf_path(entry)
             self.visual.print("Opening: {}".format(file_path))
             os.system("/usr/bin/xdg-open '{}'".format(file_path))
         else:
             self.visual.error("Entry file path does not exist: {}".format(file_path))
         return True
 
-
-    def fix_file_path(path, pdf_dir=None):
+    def fix_file_path(self, path, pdf_dir=None):
         if path.endswith(":pdf"):
             path = path[:-4]
         if path.startswith(":home"):
@@ -118,7 +118,6 @@ class Editor:
         proper_path = self.get_entry_canonic_pdf_path(entry)
         if proper_path != file_path:
             if self.visual.yes_no("File path {} differs from the proper one: {} -- rename & move?".format(file_path, proper_path)):
-                breakpoint()
                 os.rename(file_path, proper_path)
                 self.visual.log("Renamed {} to {} -- rename?".format(file_path, proper_path))
                 self.set_file(entry, proper_path)

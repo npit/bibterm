@@ -15,6 +15,7 @@ class Runner:
 
     max_search = None
     max_list = None
+    search_invoke_counter = None
 
     def __init__(self, conf, entry_collection=None):
         # assignments
@@ -27,6 +28,7 @@ class Runner:
         # maxes list
         self.max_list = 30
         self.max_search = 10
+        self.search_invoke_counter = 0
 
         # read the bib database
         if entry_collection is None:
@@ -50,10 +52,12 @@ class Runner:
 
         # ui
         self.visual = setup(conf)
-        self.visual.commands = conf.controls
 
     def search(self, query=None):
         self.visual.log("Starting search")
+        if self.search_invoke_counter > 0:
+            # step to the starting history to search everything
+            self.jump_history(0)
         search_done = False
         just_began_search = True
         query_supplied = bool(query)
@@ -95,10 +99,11 @@ class Runner:
 
             self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
             just_began_search = False
+            self.search_invoke_counter += 1
             if not self.visual.does_incremental_search:
                 break
         self.latest_list_modification = (results_ids, "search:\"{}\"".format(query))
-        # push the modification to make 
+        # push the modification to make
         self.change_history()
 
     # print entry, only fields of interest
@@ -155,17 +160,13 @@ class Runner:
 
     def list(self, arg=None):
         show_list = self.reference_entry_id_list
-        if arg is not None and arg:
-            if arg[0].isdigit():
-                at_most = int(arg)
-                if at_most >= len(self.reference_entry_id_list):
-                    self.visual.error("Reference is already {}-long.".format(len(self.reference_entry_id_list)))
-                    return
-                show_list = self.reference_entry_id_list[:int(arg)]
-                if len(show_list) < len(self.reference_entry_id_list):
-                    self.latest_list_modification = (show_list, "{} {}".format(self.commands.list, len(show_list)))
-            else:
-                self.visual.error("Undefined list argument: {}".format(arg))
+        nums = self.get_index_selection(arg)
+        if nums:
+            show_list = [self.reference_entry_id_list[n - 1] for n in nums]
+            if show_list != self.reference_entry_id_list:
+                self.latest_list_modification = (show_list, "{} {}".format(self.commands.list, len(show_list)))
+        else:
+            show_list = self.reference_entry_id_list
         self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.max_list)
 
     def is_multivalue_key(self, filter_key):
@@ -219,7 +220,7 @@ class Runner:
 
     def jump_history(self, index):
         if self.reference_history_index == index:
-            self.visual.print("Already here, m8.")
+            self.visual.error("Already on starting history.")
             return
         if index >= 0 and index < len(self.reference_history):
             self.step_history(-self.reference_history_index + index)
@@ -233,6 +234,7 @@ class Runner:
         self.command_history = [(len(self.entry_collection.id_list), "<start>")]
         self.reference_history_index = 0
         self.latest_list_modification = None
+        self.cached_selection = None
 
     # move the reference list wrt stored history
     def step_history(self, n_steps):
@@ -268,6 +270,8 @@ class Runner:
             return
         self.visual.log("Changed reference list to [{}], with {} items.".format(self.latest_list_modification[1], len(self.latest_list_modification[0])))
         self.push_reference_list(*self.latest_list_modification)
+        # unselect stuff -- it's meaningless now
+        self.cached_selection = None
 
     # add to reference list history
     def push_reference_list(self, new_list, command):
@@ -377,10 +381,6 @@ class Runner:
         while(True):
             # begin loop
             user_input, input_cmd = self.get_input(input_cmd)
-            # if not user_input:
-            #     # self.visual.newline()
-            #     continue
-
             # check for dual input
             command, arg = self.check_dual_input(user_input)
             self.visual.debug("Command: [{}] , arg: [{}]".format(command, arg))
@@ -388,7 +388,7 @@ class Runner:
             # check for repeat-command
             if command == self.commands.repeat:
                 if previous_command is None:
-                    self.visual.print("This is the first command.")
+                    self.visual.debug("This is the first command.")
                     continue
                 command = previous_command
             if command == self.commands.quit:
@@ -536,6 +536,8 @@ class Runner:
                 continue
             elif command == self.commands.clear:
                 self.visual.clear()
+            elif command == self.commands.unselect:
+                self.cached_selection = None
             elif command == self.commands.show:
                 if self.cached_selection is not None:
                     self.select(self.cached_selection)

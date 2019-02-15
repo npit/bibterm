@@ -319,7 +319,7 @@ class Blessed(Io):
             self.layout.command = self.positions.lower_left
             self.layout.log = self.positions.upper_left
             self.layout.message = (self.width // 3, self.height)
-            self.layout.debug = (self.width // 3, self.height - 1)
+            self.layout.debug = (self.width // 3, self.height - 2)
             self.layout.large_message = (2 * self.width // 3, 1)
 
             self.command_buffer_size = self.layout.message[0] - 1
@@ -342,6 +342,10 @@ class Blessed(Io):
         self.prompt_in_use = False
         self.data_buffer = []
         printing_multiple_entries = False
+
+        # controls
+        self.commands = conf.controls
+        self.selection_commands = conf.selection_commands
 
     def log(self, msg):
         self.clear_line(self.layout.log[1])
@@ -424,6 +428,27 @@ class Blessed(Io):
             self.clear_data()
         return done, self.search_cache
 
+    def get_command_full_name(self, cmd):
+        return [k for k in self.commands if self.commands[k] == cmd][0]
+
+    def match_command(self, inp):
+        candidate_commands = self.get_candidate_commands(inp)
+        exact_match = [inp == c for c in candidate_commands]
+        if any(exact_match):
+            exact_command = [candidate_commands[i] for i in range(len(exact_match)) if exact_match[i]][0]
+        else:
+            exact_command = None
+        return candidate_commands, exact_command
+
+    def conditional_clear_selection(self, command):
+        """Clear the selection cache on selecton-unrelated commands
+        """
+        if not self.selection_cache:
+            return
+        if command not in self.selection_commands:
+            self.selection_cache = ""
+            self.debug_message("Cleared selection")
+
     def receive_command(self):
         x, y = self.layout.command
         starting_x = 2
@@ -433,7 +458,8 @@ class Blessed(Io):
 
         inp = self.selection_cache
         while not done:
-            # get_character
+            command = ""
+            # input
             new_inp = self.input_multichar(starting_x, y, single_char=True, initial_entry=inp)
             # esc
             if new_inp is None:
@@ -447,66 +473,65 @@ class Blessed(Io):
                 self.prompt_in_use = False
                 command = inp
                 break
+            # del to empty
+            if not new_inp:
+                self.selection_cache = ""
+                self.prompt_in_use = False
+                break
             inp = new_inp
+
             self.debug_message("Sel. cache: [{}]".format(self.selection_cache))
-            # c = self.get_raw_input()
-            # if c.is_sequence:
-            #     if c.name == "KEY_DELETE":
-            #         self.clear_line(y, starting_x)
-            #         inp = inp[:-1]
-            #     elif c.name == "KEY_ENTER":
-            #         command = inp
-            #         self.selection_cache = ""
-            #         self.prompt_in_use = False
-            #         break
-            #     elif c.name == "KEY_ESCAPE":
-            #         # clear selection cache
-            #         self.selection_cache = ""
-            #         self.prompt_in_use = False
-            #         command = ""
-            #         break
-            #     else:
-            #         self.message("Got metakey: {}".format(c.name))
-            #         continue
-            # else:
-            #     inp += c
 
             # check for command match
-            candidate_commands = self.get_candidate_commands(inp)
-            exact_match = [inp == c for c in candidate_commands]
-            if any(exact_match):
-                command = [candidate_commands[i] for i in range(len(exact_match)) if exact_match[i]][0]
-                command_name = [k for k in self.commands if self.commands[k] == command][0]
-                info_msg = "command: " + command_name
-                # display and break
+            candidate_commands, exact_command = self.match_command(inp)
+            if exact_command:
+                info_msg = "command: " + self.get_command_full_name(exact_command)
                 self.temp_print(inp, x, y)
+                command = exact_command
+                # if the matched is not selection-related, clear the selection
+                self.conditional_clear_selection(command)
                 break
 
             # show possible command matches from current string
             if candidate_commands:
-                info_msg = " ".join(candidate_commands)
+                info_msg = "<{}>".format(" ".join(candidate_commands))
             else:
-                # no candidate commands -- check if it's a selection
-                if utils.is_index_list(inp) or self.selection_cache:
-                    if not utils.is_valid_index_list(inp):
-                        info_msg = "invalid selection"
-                    else:
-                        self.prompt_in_use = True
-                        info_msg = "selection"
-                        # if there's a cache, update it
-                        self.selection_cache = inp
-                        command = inp
-                        # display and break
+                # no candidate commands
+                # if current string is a valid selection, update it
+                if utils.is_index_list(inp):
+                    self.prompt_in_use = True
+                    info_msg = "selection"
+                    # set selection cache
+                    self.selection_cache = inp
+                    command = inp
+                    # display and break
+                    self.temp_print(inp, x, y)
+                    break
+                elif self.selection_cache:
+                    # not valid selection, but previous one was
+                    new_inp = inp[len(self.selection_cache):]
+                    # if extraneous input is a command, partial or not, show it
+                    candidate_commands, exact_command = self.match_command(new_inp)
+                    if exact_command:
+                        self.debug_message('Selection cmd')
+                        # apply exact command on selection
+                        info_msg = "command: " + self.get_command_full_name(exact_command)
                         self.temp_print(inp, x, y)
-                        break
-                else:
-                    # invalid input: show suggestions starting from the last  valid sequence
-                    # shave off that last invalid char
-                    inp = inp[:-1]
-                    if not inp:
-                        info_msg = "Candidate commands: {}".format(" ".join(self.commands.values()))
+                        command = exact_command + " " + self.selection_cache
+                        done = True
+                    elif candidate_commands:
+                        # show partial
+                        info_msg = "<{}> {}".format(" ".join(candidate_commands), self.selection_cache)
+                        self.debug_message('Selection partial')
                     else:
-                        info_msg = "Candidate commands: {}".format(" ".join(self.get_candidate_commands(inp)))
+                        info_msg = "Invalid selection / selection-command: {}".format(inp)
+                        self.debug_message('Invalid selection cmd')
+
+                else:
+                    # wholly invalid input: shave off that last invalid char
+                    inp = inp[:-1]
+                    #  show suggestions starting from the last  valid sequence
+                    info_msg = "Candidate commands: {}".format(" ".join(self.commands.values()))
                     self.message(info_msg)
 
             # show current entry
@@ -520,6 +545,8 @@ class Blessed(Io):
         return command
 
     def get_candidate_commands(self, partial_str):
+        if not partial_str:
+            return self.commands.values()
         return [cmd for cmd in self.commands.values() if utils.matches(partial_str, cmd)]
 
     def clear_data(self):
