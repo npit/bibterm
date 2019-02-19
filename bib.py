@@ -7,7 +7,6 @@ import visual
 import clipboard
 from utils import to_namedtuple
 
-
 def merge(conf, vis, merge_args, string_data=None):
     copying_single_string = False
     reader = Reader(conf)

@@ -28,6 +28,7 @@ class Io:
     instance = None
     clear_size = 100
     prompt = ">"
+    handles_max_results = None
 
     does_incremental_search = False
 
@@ -36,6 +37,7 @@ class Io:
 
     def __init__(self, conf):
         self.do_debug = conf.debug
+        self.handles_max_results = False
 
     def get_instance(conf=None):
         if Io.instance is not None:
@@ -170,7 +172,8 @@ class Io:
         return "{:<{w}s}".format(title, w=maxlen_title)
 
     def ID_str(self, ID, maxlen_id):
-        return "{:<{w}s}".format("\\cite{" + ID + "}", w=maxlen_id + 7)
+        # return "{:<{w}s}".format("\\cite{" + ID + "}", w=maxlen_id + 7)
+        return "{:<{w}s}".format(ID, w=maxlen_id + 7)
 
     def keyword_str(self, keywords):
         if keywords is None or not keywords:
@@ -216,12 +219,19 @@ class Io:
                 self.title_str(entry.title, maxlens[2]), self.keyword_str(entry.keywords))
 
     # produce enumeration strings
-    def gen_entries_strings(self, entries, maxlens):
+    def gen_entries_strings(self, entries, additional_fields):
+        maxlen_id = max([len(x.ID) for x in entries])
+        maxlen_title = max([len(x.title) for x in entries])
+        maxlens = len(entries), maxlen_id, maxlen_title
         enum_str_list = []
         for i, entry in enumerate(entries):
+            st = self.gen_entry_strings(entry, maxlens)
+            if additional_fields:
+                st += additional_fields[i]
             enum_str_list.append(self.gen_entry_strings(entry, maxlens))
         return enum_str_list
 
+    # print iff in debug mode
     def debug(self, msg):
         if not self.do_debug:
             return
@@ -233,17 +243,7 @@ class Io:
             return
         if not x_iter:
             return
-        if len(x_iter) != len(entry_collection.entries):
-            # recompute max lengths
-            maxlen_id = max([len(x.ID) for x in x_iter])
-            maxlen_title = max([len(x.title) for x in x_iter])
-            maxlens = len(x_iter), maxlen_id, maxlen_title
-        else:
-            maxlens = entry_collection.maxlens()
-
-        strings = ["{} {} {}".format(*tup) for tup in self.gen_entries_strings(x_iter, maxlens)]
-        if additional_fields:
-            strings = [s + f for (s, f) in zip(strings, additional_fields)]
+        strings = ["{} {} {}".format(*tup) for tup in self.gen_entries_strings(x_iter, additional_fields)]
         self.print_enum(strings, at_most=at_most)
         if print_newline:
             self.newline()
@@ -268,7 +268,11 @@ class Io:
     def pause(self, msg):
         self.ask_user(msg)
 
+    def up(self):
+        pass
 
+    def down(self):
+        pass
 
 class Blessed(Io):
     name = "blessed"
@@ -341,7 +345,9 @@ class Blessed(Io):
         self.search_cache = ""
         self.prompt_in_use = False
         self.data_buffer = []
-        printing_multiple_entries = False
+        self.printing_multiple_entries = False
+        self.handles_max_results = False
+        self.viewport_top = 0
 
         # controls
         self.commands = conf.controls
@@ -361,30 +367,48 @@ class Blessed(Io):
         Blessed.instance = Blessed(conf)
         return Blessed.instance
 
-    def print(self, msg, temp=False, no_newline=False, use_buffer=False):
+    def set_viewport(self, top_line):
+        self.viewport_top = top_line
+
+    def print(self, msg, temp=False, no_newline=False, use_buffer=True, limit_dots=False):
         if not msg:
             return
         if self.only_debug and not self.do_debug:
             return
 
+        # truncate overly long lines
+        # put lines to current dimensions
+        if type(msg) == list:
+            msg = [x.strip() for x in msg]
+        else:
+            msg = msg.strip().split("\n")
+
+        if not msg:
+            return
+        for i, line in enumerate(msg):
+            if len(line) > self.width:
+                line = utils.limit_size(line, self.width - 1)
+                msg[i] = line
+        if len(msg) > self.height:
+            msg = msg[:self.height - 2]
+
         if use_buffer:
             self.clear_data()
-            if not msg:
-                return
-            if self.only_debug and not self.do_debug:
-                return
-            # put lines to buffer
-            msg = msg.split("\n")
-            for i, line in enumerate(msg):
-                if len(line) > self.width:
-                    line = utils.limit_size(line, self.width)
-                    msg[i] = line
             self.data_buffer.extend(msg)
             # restrict to size
-            buffer_to_print = "\n".join(self.data_buffer[-self.data_buffer_size:])
-            print(self.term.normal, buffer_to_print)
+            if limit_dots:
+                # show the last line, and fill line before it with dots
+                buffer_to_print = self.data_buffer[self.viewport_top: self.data_buffer_size - 2]
+                buffer_to_print.append("...")
+                buffer_to_print.append(self.data_buffer[-1])
+            else:
+                # show the last section that fits
+                buffer_to_print = self.data_buffer[self.viewport_top:]
+            buffer_to_print = "\n".join(buffer_to_print)
+            self.temp_print(buffer_to_print, 0, self.data_start_line)
         else:
-            print(self.term.normal, msg)
+            msg = "\n".join(msg)
+            self.temp_print(msg, 0, self.data_start_line)
 
     def clear(self):
         print(self.term.clear())
@@ -635,7 +659,8 @@ class Blessed(Io):
     def print_enum(self, x_iter, at_most=None, additionals=None):
         self.clear_data()
         with self.term.location(0, self.data_start_line):
-            Io.print_enum(self, x_iter, at_most, additionals)
+            # Io.print_enum(self, x_iter, at_most, additionals)
+            self.print(self.enum(x_iter))
 
     def error(self, msg):
         self.message("(!) {}".format(msg))
@@ -711,6 +736,12 @@ class Blessed(Io):
             if single_char:
                 break
         return res
+
+    def up(self):
+        self.set_viewport(max(self.viewport_top - 1, 0))
+
+    def down(self):
+        self.set_viewport(min(self.viewport_top + 1, self.height))
 
 
 if __name__ == '__main__':

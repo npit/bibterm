@@ -25,11 +25,6 @@ class Runner:
         self.cached_selection = None
         self.has_stored_input = False
 
-        # maxes list
-        self.max_list = 30
-        self.max_search = 10
-        self.search_invoke_counter = 0
-
         # read the bib database
         if entry_collection is None:
             rdr = Reader(conf)
@@ -52,6 +47,16 @@ class Runner:
 
         # ui
         self.visual = setup(conf)
+
+        # maxes list
+        if self.visual.handles_max_results:
+            self.max_list = 30
+            self.max_search = 10
+        else:
+            self.max_list = None
+            self.max_search = None
+        self.search_invoke_counter = 0
+
 
     def search(self, query=None):
         self.visual.log("Starting search")
@@ -81,7 +86,9 @@ class Runner:
                 ids, scores = [r[0] for r in res], [r[1] for r in res]
                 with utils.OnlyDebug(self.visual):
                     self.visual.debug("Results for query: {} on field: {}".format(query, field))
-                    self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids], self.entry_collection, additional_fields=list(map(str, scores)), print_newline=True)
+                    self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids],
+                                                   self.entry_collection, additional_fields=list(map(str, scores)),
+                                                   print_newline=True)
 
                 for i in range(len(ids)):
                     if ids[i] in results_ids:
@@ -543,6 +550,10 @@ class Runner:
                     self.select(self.cached_selection)
                 else:
                     self.visual.error("No selection to show.")
+            elif command == self.commands.up:
+                self.visual.up()
+            elif command == self.commands.down:
+                self.visual.down()
             elif utils.is_index_list(command):
                 # print(self.reference_entry_id_list)
                 # for numeric input, select these entries

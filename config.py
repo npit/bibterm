@@ -34,6 +34,8 @@ def get_defaults(conf):
     # controls
     conf["controls"] = {
         "search": "/",
+        "down": "j",
+        "up": "k",
         "list": "l",
         "clear": "",
         "unselect": "us",
