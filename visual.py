@@ -37,7 +37,7 @@ class Io:
 
     def __init__(self, conf):
         self.do_debug = conf.debug
-        self.handles_max_results = False
+        self.handles_max_results = True
 
     def get_instance(conf=None):
         if Io.instance is not None:
@@ -265,7 +265,7 @@ class Io:
         for entry in entries:
             self.print_entry_contents(entry)
 
-    def pause(self, msg):
+    def pause(self, msg=""):
         self.ask_user(msg)
 
     def up(self):
@@ -274,11 +274,13 @@ class Io:
     def down(self):
         pass
 
+
 class Blessed(Io):
     name = "blessed"
     term = None
     instance = None
     search_cache = ""
+    search_cache_underflow = None
     selection_cache = ""
     does_incremental_search = True
     message_buffer_size = None
@@ -340,9 +342,10 @@ class Blessed(Io):
         self.initialize_layout()
         self.clear()
         self.data_start_line = 2
-        self.data_end_line = self.height -1
-        self.data_buffer_size = self.data_end_line - self.data_start_line -3
+        self.data_end_line = self.height - 1
+        self.data_buffer_size = self.data_end_line - self.data_start_line - 3
         self.search_cache = ""
+        self.search_cache_underflow = False
         self.prompt_in_use = False
         self.data_buffer = []
         self.printing_multiple_entries = False
@@ -369,32 +372,22 @@ class Blessed(Io):
 
     def set_viewport(self, top_line):
         self.viewport_top = top_line
+        self.print()
 
-    def print(self, msg, temp=False, no_newline=False, use_buffer=True, limit_dots=False):
-        if not msg:
-            return
+    def print(self, msg=None, temp=False, no_newline=False, use_buffer=False, limit_dots=False):
         if self.only_debug and not self.do_debug:
             return
-
         # truncate overly long lines
         # put lines to current dimensions
-        if type(msg) == list:
-            msg = [x.strip() for x in msg]
-        else:
-            msg = msg.strip().split("\n")
-
-        if not msg:
-            return
-        for i, line in enumerate(msg):
-            if len(line) > self.width:
-                line = utils.limit_size(line, self.width - 1)
-                msg[i] = line
-        if len(msg) > self.height:
-            msg = msg[:self.height - 2]
+        if msg:
+            if type(msg) != list:
+                msg = msg.strip().split("\n")
+            msg = [utils.limit_size(x.strip(), self.width - 1) for x in msg]
 
         if use_buffer:
             self.clear_data()
-            self.data_buffer.extend(msg)
+            if msg:
+                self.data_buffer.extend(msg)
             # restrict to size
             if limit_dots:
                 # show the last line, and fill line before it with dots
@@ -402,13 +395,18 @@ class Blessed(Io):
                 buffer_to_print.append("...")
                 buffer_to_print.append(self.data_buffer[-1])
             else:
-                # show the last section that fits
-                buffer_to_print = self.data_buffer[self.viewport_top:]
+                # show the section that fits wrt the viewport
+                buffer_to_print = self.data_buffer[self.viewport_top:self.viewport_top + self.data_buffer_size]
+                self.log("Using viewport bounds: {} {}".format(self.viewport_top, self.viewport_top + self.data_buffer_size))
+            buffer_to_print = self.enum(buffer_to_print)
             buffer_to_print = "\n".join(buffer_to_print)
             self.temp_print(buffer_to_print, 0, self.data_start_line)
         else:
+            msg = msg[0:self.data_buffer_size]
             msg = "\n".join(msg)
+            # self.pause()
             self.temp_print(msg, 0, self.data_start_line)
+            # self.pause()
 
     def clear(self):
         print(self.term.clear())
@@ -436,20 +434,22 @@ class Blessed(Io):
 
         # get_character
         key = self.input_multichar(x, y, single_char=True, initial_entry=self.search_cache)
-        # enter
         if key == self.search_cache:
-            done = True
+            if not self.search_cache_underflow:
+                # enter key or consecutive deletes
+                done = True
             self.search_cache = ""
         elif key is None:
+            # escape key
             done = None
             self.search_cache = ""
         else:
             self.search_cache = key
-        # self.temp_print(self.search_cache, x, y)
-        # self.temp_print(inp, x=30, y=self.y + 4)
-        self.move(0, self.data_start_line)
+            self.search_cache_underflow = False
         if done is False:
             self.clear_data()
+        self.message("{} {}".format(done, self.search_cache))
+        # self.pause()
         return done, self.search_cache
 
     def get_command_full_name(self, cmd):
@@ -576,7 +576,7 @@ class Blessed(Io):
     def clear_data(self):
         for line in (range(self.data_start_line, self.data_end_line)):
             self.clear_line(line)
-        self.move(0, self.data_start_line)
+        # self.move(0, self.data_start_line)
 
     def clear_messages(self):
         self.clear_line(self.layout.message[1], self.layout.message[0])
@@ -608,15 +608,19 @@ class Blessed(Io):
         if not self.prompt_in_use:
             self.clear_prompt()
             self.update_prompt_symbol(self.prompt)
-        # divider lines
-        self.draw_lines()
 
-        self.term.move(0, 0)
+        # divider lines
+        # self.draw_lines()
+
+        # self.term.move(0, self.data_start_line)
+
     def draw_lines(self):
+        self.message("Top {} bottom {}".format(self.layout.log[1]+1, self.layout.command[1]-1))
         # top
-        self.temp_print("_" * self.width, 0, self.layout.log[1] + 1)
+        self.pause("paused...")
+        self.temp_print("<" + ("_" * (self.width - 2)) + ">", 0, self.layout.log[1] + 1)
         # bottom
-        self.temp_print("_" * self.width, 0, self.layout.command[1] - 1)
+        self.temp_print("<" + ("_" * (self.width - 2)) + ">", 0, self.layout.command[1] - 1)
 
     def temp_print(self, msg, x, y):
         # # skip the log line
@@ -719,6 +723,9 @@ class Blessed(Io):
                 # blessed sequence key
                 if key.name == "KEY_DELETE":
                     self.clear_line(y, x)
+                    if not res:
+                        # manage potential search_cache underflow
+                        self.search_cache_underflow = True
                     res = res[:-1]
                 if key.name == "KEY_ENTER":
                     # on enter, we're done
@@ -741,7 +748,9 @@ class Blessed(Io):
         self.set_viewport(max(self.viewport_top - 1, 0))
 
     def down(self):
-        self.set_viewport(min(self.viewport_top + 1, self.height))
+        highest_viewport_top = len(self.data_buffer) - self.data_buffer_size
+        self.set_viewport(min(highest_viewport_top, self.viewport_top + 1))
+        self.message("highest vp {}" + str(highest_viewport_top))
 
 
 if __name__ == '__main__':

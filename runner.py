@@ -49,6 +49,7 @@ class Runner:
         self.visual = setup(conf)
 
         # maxes list
+        # delegate handling of maximum results number to the visual component or not
         if self.visual.handles_max_results:
             self.max_list = 30
             self.max_search = 10
@@ -56,7 +57,6 @@ class Runner:
             self.max_list = None
             self.max_search = None
         self.search_invoke_counter = 0
-
 
     def search(self, query=None):
         self.visual.log("Starting search")
@@ -73,7 +73,7 @@ class Runner:
                 if search_done is None:
                     self.visual.message("Aborting search")
                     return
-                if new_query == "":
+                if new_query == "" and search_done:
                     # pressed enter
                     break
                 query = new_query
@@ -454,8 +454,6 @@ class Runner:
             elif command.startswith(self.commands.search):
                 query = arg if arg else ""
                 if command == self.commands.search and not arg:
-                    # search_prompt = "Enter search term(s):"
-                    # query = self.visual.input_multichar()
                     pass
                 else:
                     query = str(command[len(self.commands.search):]) + query
