@@ -1,5 +1,4 @@
 import json
-import sys
 import utils
 from blessed import Terminal
 from fuzzywuzzy import fuzz
@@ -248,16 +247,18 @@ class Io:
         if print_newline:
             self.newline()
 
-    def print_entry_contents(self, entry):
-        if self.only_debug and not self.do_debug:
-            return
+    def get_entry_contents(self, entry):
         if type(entry) != dict:
             entry = entry.get_pretty_dict()
         st = json.dumps(entry, indent=2)
         # remove enclosing {}
         st = " " + st.strip()[1:-1].strip()
-        self.print(st)
-        self.print("_" * 15)
+        return st + " \n{}".format("_" * 15)
+
+    def print_entry_contents(self, entry):
+        if self.only_debug and not self.do_debug:
+            return
+        self.print(self.get_entry_contents())
 
     def print_entries_contents(self, entries):
         if self.only_debug and not self.do_debug:
@@ -284,7 +285,7 @@ class Blessed(Io):
     selection_cache = ""
     does_incremental_search = True
     message_buffer_size = None
-    printing_multiple_entries = None
+    use_buffer = None
 
     # metakey handling (e.g. C-V)
     key_codes = {'\x16': ('C-V', lambda x: clipboard.paste())
@@ -348,9 +349,9 @@ class Blessed(Io):
         self.search_cache_underflow = False
         self.prompt_in_use = False
         self.data_buffer = []
-        self.printing_multiple_entries = False
         self.handles_max_results = False
         self.viewport_top = 0
+        self.use_buffer = False
 
         # controls
         self.commands = conf.controls
@@ -374,7 +375,7 @@ class Blessed(Io):
         self.viewport_top = top_line
         self.print()
 
-    def print(self, msg=None, temp=False, no_newline=False, use_buffer=False, limit_dots=False):
+    def print(self, msg=None, temp=False, no_newline=False, limit_dots=False):
         if self.only_debug and not self.do_debug:
             return
         # truncate overly long lines
@@ -384,7 +385,7 @@ class Blessed(Io):
                 msg = msg.strip().split("\n")
             msg = [utils.limit_size(x.strip(), self.width - 1) for x in msg]
 
-        if use_buffer:
+        if self.use_buffer:
             self.clear_data()
             if msg:
                 self.data_buffer.extend(msg)
@@ -524,9 +525,9 @@ class Blessed(Io):
                 # if current string is a valid selection, update it
                 if utils.is_index_list(inp):
                     self.prompt_in_use = True
-                    info_msg = "selection"
                     # set selection cache
                     self.selection_cache = inp
+                    info_msg = "selection: {}".format(self.selection_cache)
                     command = inp
                     # display and break
                     self.temp_print(inp, x, y)
@@ -550,7 +551,6 @@ class Blessed(Io):
                     else:
                         info_msg = "Invalid selection / selection-command: {}".format(inp)
                         self.debug_message('Invalid selection cmd')
-
                 else:
                     # wholly invalid input: shave off that last invalid char
                     inp = inp[:-1]
@@ -615,7 +615,7 @@ class Blessed(Io):
         # self.term.move(0, self.data_start_line)
 
     def draw_lines(self):
-        self.message("Top {} bottom {}".format(self.layout.log[1]+1, self.layout.command[1]-1))
+        self.message("Top {} bottom {}".format(self.layout.log[1] + 1, self.layout.command[1] - 1))
         # top
         self.pause("paused...")
         self.temp_print("<" + ("_" * (self.width - 2)) + ">", 0, self.layout.log[1] + 1)
@@ -644,21 +644,11 @@ class Blessed(Io):
         with self.term.location(0, self.data_start_line):
             Io.print_entries_enum(self, x_iter, entry_collection, at_most, additional_fields, print_newline)
 
-
-    def print_entry_contents(self, entry):
-        if not self.printing_multiple_entries:
-            self.clear_data()
-            with self.term.location(0, self.data_start_line):
-                Io.print_entry_contents(self, entry)
-        else:
-            Io.print_entry_contents(self, entry)
-
     def print_entries_contents(self, entries):
-        self.printing_multiple_entries = True
         self.clear_data()
         with self.term.location(0, self.data_start_line):
-            Io.print_entries_contents(self, entries)
-        self.printing_multiple_entries = False
+            entry_contents_str = "\n".join([self.get_entry_contents(entry) for entry in entries])
+            self.print(entry_contents_str)
 
     def print_enum(self, x_iter, at_most=None, additionals=None):
         self.clear_data()
@@ -745,9 +735,13 @@ class Blessed(Io):
         return res
 
     def up(self):
+        if not self.use_buffer:
+            return
         self.set_viewport(max(self.viewport_top - 1, 0))
 
     def down(self):
+        if not self.use_buffer:
+            return
         highest_viewport_top = len(self.data_buffer) - self.data_buffer_size
         self.set_viewport(min(highest_viewport_top, self.viewport_top + 1))
         self.message("highest vp {}" + str(highest_viewport_top))
@@ -776,7 +770,3 @@ if __name__ == '__main__':
 
             with t.location(2, 10):
                 print(inp)
-            # self.temp_print(inp, x=30, y=self.y + 4)
-
-
-
