@@ -7,6 +7,7 @@ import visual
 import clipboard
 from utils import to_namedtuple
 
+
 def merge(conf, vis, merge_args, string_data=None):
     copying_single_string = False
     reader = Reader(conf)
@@ -92,6 +93,7 @@ def main():
     if runner is None:
         runner = Runner(conf)
     runner.loop(input_cmd=input_cmd)
+
 
 if __name__ == '__main__':
     main()

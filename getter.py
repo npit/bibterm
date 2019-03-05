@@ -32,9 +32,18 @@ class Getter:
             return None
 
     def search_web_pdf(self, entry_id, entry_title):
-        url = self.conf.pdf_search + "+".join(entry_title.split())
+        source_names = list(self.conf.pdf_search)
+        source_names[0] = "*" + source_names[0]
+        src = self.visual.ask_user("Search for pdf where?", source_names)
+        if not src:
+            self.visual.log("Aborting pdf search.")
+            return None
+        url = self.conf.pdf_search[src] + "+".join(entry_title.split())
         prog = self.conf.browser
         subprocess.run([prog, url])
         self.visual.pause("Copy web pdf path and press enter to continue")
         web_path = clipboard.paste()
+        if not web_path:
+            if self.visual.yes_no("Search for pdf again?"):
+                return self.search_web_pdf(entry_id, entry_title)
         return self.get_web_pdf(web_path, entry_id)

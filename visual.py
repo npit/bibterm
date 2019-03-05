@@ -3,6 +3,7 @@ import utils
 from blessed import Terminal
 from fuzzywuzzy import fuzz
 import clipboard
+from itertools import combinations
 
 
 # base class to get and print stuff
@@ -93,9 +94,7 @@ class Io:
         return input(msg)
 
     def generate_user_responses(self, msg, options_str):
-        opts = None
-        opt_print = None
-        default_option_idx = None
+        opts, opt_selection, opt_print, default_option_idx = [None] * 4
         if options_str is not None:
             opts = options_str.split()
             explicit_opts = [x[1:] for x in opts if x.startswith("#")]
@@ -109,7 +108,19 @@ class Io:
                 # remove asterisk from raw inputs
                 opts[default_option_idx] = opts[default_option_idx][1:]
 
-            opt_print = ["[{}]{}".format(x[0], x[1:]) for x in opts]
+            # deduce the num. of letters required to distinguish opts
+            num_letters_required = 1
+            opt_combos = list(combinations(opts, 2))
+            while True:
+                if num_letters_required > max(list(map(len, opts))):
+                    self.error("Indistinguishable options exist in options string: {}".format(options_str))
+                if any([comb[0][:num_letters_required] == comb[1][:num_letters_required] for comb in opt_combos]):
+                    num_letters_required += 1
+                    continue
+                break
+
+            opt_selection = [c[:num_letters_required] for c in opts]
+            opt_print = ["[{}]{}".format(x[:num_letters_required], x[num_letters_required:]) for x in opts]
             if default_option_idx is not None:
                 # add asterisk on print
                 opt_print[default_option_idx] = self.default_option_mark + opt_print[default_option_idx]
@@ -118,11 +129,12 @@ class Io:
         else:
             if msg:
                 msg += ": "
-        return msg, opts, opt_print, default_option_idx
+        return msg, opts, opt_print, opt_selection, default_option_idx
 
     # func to show choices. Bang options are explicit and are not edited
-    def ask_user(self, msg="", options_str=None, check=True, multichar=True):
-        msg, opts, opt_print, default_option_idx = self.generate_user_responses(msg, options_str)
+    def ask_user(self, msg="", options_str=None, check=True, multichar=True, return_match=True):
+        options_str = " ".join(options_str) if type(options_str) == list else options_str
+        msg, opts, opt_print, opt_selection, default_option_idx = self.generate_user_responses(msg, options_str)
         while True:
             ans = self.get_raw_input(msg)
             if options_str:
@@ -131,9 +143,17 @@ class Io:
                     return opts[default_option_idx]
                 # loop on invalid input, if check
                 if check:
-                    if not utils.matches(ans, opts):
+                    # no exact match on full or required option lengths
+                    if not any([ans == x for x in opt_selection + opts]):
                         self.print("Valid options are: " + opt_print)
                         continue
+
+                # return matching entry from the options
+                if return_match:
+                    for x in opts:
+                        if x.startswith(ans):
+                            ans = x
+                            break
             else:
                 ans = ans.strip()
             # valid or no-option input
@@ -258,7 +278,7 @@ class Io:
     def print_entry_contents(self, entry):
         if self.only_debug and not self.do_debug:
             return
-        self.print(self.get_entry_contents())
+        self.print(self.get_entry_contents(entry))
 
     def print_entries_contents(self, entries):
         if self.only_debug and not self.do_debug:
@@ -288,8 +308,9 @@ class Blessed(Io):
     use_buffer = None
 
     # metakey handling (e.g. C-V)
-    key_codes = {'\x16': ('C-V', lambda x: clipboard.paste())
+    key_codes = {'\x16': ('C-V', lambda x: clipboard.paste().replace("\n", ""))
                  }
+
 
     def get_metakey(self, key):
         if key in self.key_codes:
@@ -667,8 +688,8 @@ class Blessed(Io):
         return utils.matches(what, "yes")
 
     # func to show choices. Bang options are explicit and are not edited
-    def ask_user(self, msg="", options_str=None, check=True, multichar=False):
-        msg, opts, opt_print, default_option_idx = self.generate_user_responses(msg, options_str)
+    def ask_user(self, msg="", options_str=None, check=True, multichar=False, return_match=False):
+        msg, opts, opt_print, opt_selection, default_option_idx = self.generate_user_responses(msg, options_str)
         self.clear_prompt()
         prompt_input_coords = self.update_prompt_symbol(msg)
         while True:
@@ -686,9 +707,15 @@ class Blessed(Io):
                     return opts[default_option_idx]
                 # loop on invalid input, if check
                 if check:
-                    if not utils.matches(ans, opts):
+                    if not any([ans == x for x in opt_selection + opts]):
+                    # if not utils.matches(ans, opts):
                         self.error("Valid options are: " + opt_print)
                         continue
+                # return matching entry from the options
+                if return_match:
+                    for x in opts:
+                        if x.startswith(ans):
+                            ans = x
             else:
                 ans = ans.strip()
             # valid or no-option input

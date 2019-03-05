@@ -320,15 +320,16 @@ class Runner:
             return nums
 
     def save_if_modified(self, verify_write=True, called_explicitely=False):
-        # for auto-calls, do not print anything if the collection was not modified
-        if not called_explicitely and not self.modified_collection():
-            return
         modified_status = "*has been modified*" if self.modified_collection() else "has not been modified"
         if verify_write:
-            # for explicit calls, do not ask for verification if it's NOT been modified
-            if called_explicitely and not self.modified_collection():
+            # for explicit calls, do not ask for verification
+            if called_explicitely:
                 pass
             else:
+                # if auto-called and not modified, do nothing
+                if not self.modified_collection():
+                    return
+                # else verify
                 if not self.visual.yes_no("The collection {}. Overwrite?".format(modified_status), default_yes=False):
                     return
         # write
@@ -379,8 +380,12 @@ class Runner:
             if not self.visual.yes_no("Pdf path exists: {}, replace?".format(entry.file), default_yes=False):
                 return
         pdf_path = self.get_getter().search_web_pdf(entry_id, entry.title)
-
+        if not pdf_path:
+            self.visual.log("Invalid pdf path, aborting.")
+            return
         updated_entry = self.get_editor().set_file(entry, file_path=pdf_path)
+        if updated_entry is None:
+            return
         self.entry_collection.replace(updated_entry)
 
     def loop(self, input_cmd=None):
@@ -487,7 +492,7 @@ class Runner:
                     entry = self.entry_collection.entries[entry_id]
                     pdf_in_entry = self.get_editor().open(entry)
                     if not pdf_in_entry and len(nums) == 1:
-                        if self.visual.yes_no("Search for pdf in google scholar?"):
+                        if self.visual.yes_no("Search for pdf on the web?"):
                             self.search_web_pdf()
 
             # fetching from google scholar
