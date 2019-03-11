@@ -4,8 +4,8 @@ from writer import Writer
 from config import get_config, get_conf_filepath
 import argparse
 import visual
+from utils import to_namedtuple, paste
 import clipboard
-from utils import to_namedtuple
 
 
 def merge(conf, vis, merge_args, string_data=None):
@@ -19,7 +19,7 @@ def merge(conf, vis, merge_args, string_data=None):
         reader2.read(merge_args[0])
     else:
         vis.print("Merging copied content.")
-        reader2.read_string(clipboard.paste())
+        reader2.read_string(paste(single_line=False))
     if len(reader2.get_entry_collection().entries) == 0:
         vis.print("Zero items extracted from the collection to merge, exiting.")
         return

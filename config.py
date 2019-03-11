@@ -1,6 +1,7 @@
 from os.path import expanduser, join, exists, isfile, dirname
 from os import makedirs
 import json
+import utils
 import clipboard
 
 """
@@ -69,7 +70,7 @@ def get_defaults(conf):
 
 def get_config():
     # backup copied data, in case we are adding an entry
-    copied_data = clipboard.paste()
+    copied_data = utils.paste(single_line=False)
     initialized = False
     conf_filepath = get_conf_filepath()
     # check for existence of config file

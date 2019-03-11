@@ -520,8 +520,10 @@ class Runner:
                 if not self.visual.yes_no("Store?"):
                     continue
                 for entry in read_entries_dict.values():
-                    self.entry_collection.create(entry)
+                    created = self.entry_collection.create(entry)
                 if not self.visual.yes_no("Select it?"):
+                    continue
+                if not created:
                     continue
                 self.reset_history()
                 self.cached_selection = [i + 1 for i in range(len(self.reference_entry_id_list)) if self.reference_entry_id_list[i] in read_entries_dict]

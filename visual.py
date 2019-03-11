@@ -2,7 +2,6 @@ import json
 import utils
 from blessed import Terminal
 from fuzzywuzzy import fuzz
-import clipboard
 from itertools import combinations
 
 
@@ -308,9 +307,8 @@ class Blessed(Io):
     use_buffer = None
 
     # metakey handling (e.g. C-V)
-    key_codes = {'\x16': ('C-V', lambda x: clipboard.paste().replace("\n", ""))
+    key_codes = {'\x16': ('C-V', lambda x: utils.paste())
                  }
-
 
     def get_metakey(self, key):
         if key in self.key_codes:
@@ -708,7 +706,6 @@ class Blessed(Io):
                 # loop on invalid input, if check
                 if check:
                     if not any([ans == x for x in opt_selection + opts]):
-                    # if not utils.matches(ans, opts):
                         self.error("Valid options are: " + opt_print)
                         continue
                 # return matching entry from the options

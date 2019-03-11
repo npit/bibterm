@@ -305,7 +305,9 @@ class EntryCollection:
         return fix
 
     def create(self, ent, position=None):
-        self.insert(ent, can_fix=False)
+        inserted = self.insert(ent, can_fix=False)
+        if not inserted:
+            return False
         if position is None:
             self.bibtex_db.entries.append(ent.raw_dict)
         else:
@@ -317,6 +319,7 @@ class EntryCollection:
             # self.visual.warn("Non existing ID on bibtex dict: {}, adding.".format(ent.ID))
             self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
         self.modified_collection = True
+        return True
 
     def insert(self, ent, can_fix=True):
         if can_fix:
@@ -326,7 +329,7 @@ class EntryCollection:
         # update object lookup dict
         if ID in self.entries:
             self.visual.error("Entry with id {} already in entries dict!".format(ID))
-            return
+            return False
         self.entries[ID] = ent
         # update title-id mapping
         self.title2id[title] = ID
@@ -338,6 +341,7 @@ class EntryCollection:
             self.maxlen_id = len(ent.ID)
         if len(ent.title) > self.maxlen_title:
             self.maxlen_title = len(ent.title)
+        return True
 
     def find_ID_(self, thelist, ID):
         for i in range(len(self.entries)):

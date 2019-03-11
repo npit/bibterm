@@ -1,4 +1,14 @@
 from collections import namedtuple
+import clipboard
+
+
+# paste handler
+def paste(single_line=True):
+    pasted_content = clipboard.paste()
+    if single_line:
+        # remove newlines
+        pasted_content = pasted_content.replace("\n", " ")
+    return pasted_content
 
 
 def limit_size(msg, max_size, trunc_symbol="..."):
@@ -94,7 +104,6 @@ def str_to_int(inp, default=None):
 
 def has_none(inp):
     return inp is None or any([x is None for x in inp])
-
 
 
 # debug with statement for visual
