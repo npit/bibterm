@@ -36,6 +36,7 @@ def get_defaults(conf):
     conf["controls"] = {
         "search": "/",
         "down": "j",
+        "get": "g",
         "up": "k",
         "list": "l",
         "clear": "",
@@ -47,6 +48,7 @@ def get_defaults(conf):
         "save": "sa",
         "cite": "c",
         "pdf_file": "fp",
+        "pdf_search": "fs",
         "pdf_web": "fw",
         "pdf_open": "o",
         "history_show": "h",
@@ -61,10 +63,12 @@ def get_defaults(conf):
     conf["selection_commands"] = ["list", "delete", "cite", "tag", "pdf_file", "pdf_web", "pdf_open"]
 
     conf["browser"] = "chromium"
-    conf["pdf_search"] = "https://scholar.google.com/scholar?hl=en&q="
+    conf["pdf_search"] = {
+            "scholar": "https://scholar.google.com/scholar?hl=en&q=",
+            "scihub": "https://sci-hub.tw"}
     conf["actions"] = ["merge", "inspect"]
     conf["visual"] = "default"
-    conf["pdf_dir"] = join(dirname(conf.bib_path), "pdfs")
+    conf["pdf_dir"] = join(dirname(conf["bib_path"]), "pdfs")
     return conf
 
 

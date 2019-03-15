@@ -513,8 +513,11 @@ class Reader:
         return bib_path
 
     def load_collection(self, db):
-        with open(self.tags_path) as f:
-            self.tags_info = json.load(f)
+        if os.path.exists(self.tags_path):
+            with open(self.tags_path) as f:
+                self.tags_info = json.load(f)
+        else:
+            self.tags_info = {"keep":[],"map":{}}
         return EntryCollection(db, self.tags_info)
 
     # Read from string
