@@ -26,8 +26,10 @@ def create_config():
     if not isfile(bib_filepath):
         print("Specified path is not a file.")
         exit(1)
+    browser_cmd = input("Give browser command: ")
     # populate configuration
     conf["bib_path"] = bib_filepath
+    conf["browser"] = browser_cmd
     return conf
 
 
@@ -62,10 +64,8 @@ def get_defaults(conf):
     # controls that can act on selection(s)
     conf["selection_commands"] = ["list", "delete", "cite", "tag", "pdf_file", "pdf_web", "pdf_open"]
 
-    conf["browser"] = "chromium"
-    conf["pdf_search"] = {
-            "scholar": "https://scholar.google.com/scholar?hl=en&q=",
-            "scihub": "https://sci-hub.tw"}
+    conf["pdf_search"] = {"scholar": "https://scholar.google.com/scholar?hl=en&q=",
+                          "scihub": "https://sci-hub.tw"}
     conf["actions"] = ["merge", "inspect"]
     conf["visual"] = "default"
     conf["pdf_dir"] = join(dirname(conf["bib_path"]), "pdfs")

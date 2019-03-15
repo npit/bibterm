@@ -1,5 +1,6 @@
 import gscholar
-from os.path import join
+from os.path import join, exists
+from os import makedirs
 from urllib.request import urlretrieve
 import visual
 import subprocess
@@ -17,10 +18,20 @@ class Getter:
         res = gscholar.query(query)
         return "\n".join(res)
 
+    def check_create_pdf_dir(self):
+        if not exists(self.conf.pdf_dir):
+            if self.visual.yes_no("Pdf directory {} does not exist -- create?".format(self.conf.pdf_dir)):
+                makedirs(self.conf.pdf_dir)
+                return True
+            return False
+        return True
+
     def get_web_pdf(self, web_path, entry_id):
         try:
-            pdf_dir = self.conf.pdf_dir
-            output_path = join(pdf_dir, "{}.pdf".format(entry_id))
+            if not self.check_create_pdf_dir():
+                self.visual.error("pdf directory {} does not exist.".format(self.conf.pdf_dir))
+                return None
+            output_path = join(self.conf.pdf_dir, "{}.pdf".format(entry_id))
             urlretrieve(web_path, output_path)
             self.visual.log("Fetching {} to {}.".format(web_path, output_path))
             return output_path
