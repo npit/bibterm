@@ -14,6 +14,51 @@ class Editor:
         else:
             self.pdf_dir = conf.pdf_dir
 
+    def check_consistency(self, entry_collection):
+        # check for unmatched pdfs
+        unmatched = []
+        for fname in os.listdir(self.pdf_dir):
+            fpath = os.path.join(self.pdf_dir, fname)
+            if not entry_collection.pdf_path_exists(fpath):
+                # attempt to assign
+                candidate_id = os.path.splitext(fname)[0]
+                if  candidate_id in entry_collection.id_list:
+                    self.visual.log("Assigned dangling {} to matching id {}.".format(fname, candidate_id))
+                    entry_collection.entries[candidate_id].set_file(fpath)
+                    entry_collection.set_modified()
+                else:
+                    unmatched.append(fpath)
+        if unmatched:
+            self.visual.message("Pdfs not matched to any entry:")
+            self.visual.print_enum(unmatched, at_most=30)
+        sel = self.visual.ask_user("What to do about them?", "delete move write-list *nothing")
+        if utils.matches(sel, "delete"):
+            for fpath in unmatched:
+                os.remove(fpath)
+            self.visual.message("Deleted.")
+        elif utils.matches(sel, "move"):
+            move_dir = self.visual.ask_user("Directory to move pdfs to:")
+            while not (os.path.exists(move_dir) and os.path.is_dir(move_dir)):
+                if not move_dir:
+                    self.visual.message("Aborting.")
+                    return
+                self.visual.message("Not a valid directory: {}".format(move_dir))
+                for fpath in unmatched:
+                    os.rename(fpath, os.path.join(move_dir, os.path.basename(fpath)))
+                self.visual.message("Moved.")
+        elif utils.matches(sel, "write-list"):
+            write_file = self.visual.ask_user("Write to what file?")
+            while not (os.path.exists(write_file)):
+                if not write_file:
+                    self.visual.message("Aborting.")
+                    return
+                self.visual.message("Not a valid file: {}".format(write_file))
+                with open(write_file, "w") as f:
+                    f.write("\n".join(unmatched))
+                self.visual.message("Wrote.")
+
+
+
     def clear_cache(self):
         self.cache = None
         self.do_apply_cache = None

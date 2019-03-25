@@ -21,6 +21,7 @@ class EntryCollection:
     entries_fixed = 0
     modified_collection = False
     keyword_override_action = None
+    all_pdf_paths = []
 
     def get_tag_information(self):
         return {"keep": list(self.keyword2id.keys()), "map": self.keywords_map}
@@ -53,6 +54,8 @@ class EntryCollection:
             ent = Entry(entry)
             self.insert(ent)
 
+    def pdf_path_exists(self, path):
+        return path in self.all_pdf_paths
     # check if num in [1, num_entries]
     def num_in_range(self, num):
         return (num >= 1 and num <= len(self.entries))
@@ -341,6 +344,8 @@ class EntryCollection:
             self.maxlen_id = len(ent.ID)
         if len(ent.title) > self.maxlen_title:
             self.maxlen_title = len(ent.title)
+        if ent.file:
+            self.all_pdf_paths.append(ent.file)
         return True
 
     def find_ID_(self, thelist, ID):
@@ -372,6 +377,9 @@ class EntryCollection:
 
     def reset_modified(self):
         self.modified_collection = False
+
+    def set_modified(self):
+        self.modified_collection = True
 
     # overwrite collection to the file specified by the configuration
     def overwrite_file(self, conf):
@@ -424,7 +432,6 @@ class Entry:
     def set_file(self, file_path):
         self.raw_dict["file"] = file_path
         self.file = file_path
-        self.modified_collection = True
 
     def set_keywords(self, kw):
         self.raw_dict["keywords"] = kw

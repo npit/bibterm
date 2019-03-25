@@ -563,9 +563,12 @@ class Runner:
                 # print(self.reference_entry_id_list)
                 # for numeric input, select these entries
                 self.select(user_input)
+            elif command == self.commands.check:
+                self.get_editor().check_consistency(self.entry_collection)
             else:
                 self.visual.error("Undefined command: {}".format(command))
                 self.visual.message("Available: {}".format(self.commands))
             previous_command = command
         # end of loop
+        breakpoint()
         self.save_if_modified()

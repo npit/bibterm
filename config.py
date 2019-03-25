@@ -41,6 +41,7 @@ def get_defaults(conf):
         "get": "g",
         "up": "k",
         "list": "l",
+        "check": "check",
         "clear": "",
         "unselect": "us",
         "delete": "del",
