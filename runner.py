@@ -111,9 +111,8 @@ class Runner:
             self.search_invoke_counter += 1
             if not self.visual.does_incremental_search:
                 break
-        self.latest_list_modification = (results_ids, "search:\"{}\"".format(query))
-        # push the modification to make
-        self.change_history()
+        # push the reflist modification to history
+        self.change_history(results_ids, "search:\"{}\"".format(query))
 
     # print entry, only fields of interest
     def inspect_entries(self, ones_idxs):
@@ -173,7 +172,8 @@ class Runner:
         if nums:
             show_list = [self.reference_entry_id_list[n - 1] for n in nums]
             if show_list != self.reference_entry_id_list:
-                self.latest_list_modification = (show_list, "{} {}".format(self.commands.list, len(show_list)))
+                # push the history change
+                self.change_history(show_list, "{} {}".format(self.commands.list, len(show_list)))
         else:
             show_list = self.reference_entry_id_list
         self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.max_list)
@@ -242,7 +242,6 @@ class Runner:
         self.reference_history = [self.entry_collection.id_list]
         self.command_history = [(len(self.entry_collection.id_list), "<start>")]
         self.reference_history_index = 0
-        self.latest_list_modification = None
         self.cached_selection = None
 
     # move the reference list wrt stored history
@@ -269,16 +268,13 @@ class Runner:
         self.visual.print_enum(self.command_history, additionals=current_mark)
         self.visual.debug("History length: {}, history lengths: {}, current index: {}, current length: {}.".format(len(self.reference_history), [len(x) for x in self.reference_history], self.reference_history_index, len(self.reference_entry_id_list)))
 
-    def change_history(self):
-        """Change the reference list to its to its latest modificdation
+    def change_history(self, new_reflist, modification_msg):
+        """Change the reference list to its latest modificdation
 
         Calling the function after a search or a truncated list, will set the reference list to the resulting entry set.
         """
-        if self.latest_list_modification is None:
-            self.visual.log("No modification has been applied.")
-            return
-        self.visual.log("Changed reference list to [{}], with {} items.".format(self.latest_list_modification[1], len(self.latest_list_modification[0])))
-        self.push_reference_list(*self.latest_list_modification)
+        self.visual.log("Changed reference list to [{}], with {} items.".format(modification_msg, len(new_reflist)))
+        self.push_reference_list(new_reflist, modification_msg)
         # unselect stuff -- it's meaningless now
         self.cached_selection = None
 
@@ -430,8 +426,6 @@ class Runner:
                 self.reset_history()
             elif command == self.commands.history_show:
                 self.show_history()
-            elif command == self.commands.history_change:
-                self.change_history()
             # -------------------------------------------------------
             elif command == self.commands.delete:
                 nums = self.get_index_selection(arg)
