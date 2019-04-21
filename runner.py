@@ -102,6 +102,8 @@ class Runner:
                         match_scores.append(scores[i])
 
             results_ids = sorted(zip(results_ids, match_scores), key=lambda x: x[1], reverse=True)
+            # apply max search results filtering
+            results_ids = results_ids[:self.max_search]
             results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
 
             self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
@@ -316,6 +318,10 @@ class Runner:
             if utils.has_none(nums):
                 # non numeric input
                 return None
+            invalids = [x for x in nums if x > len(self.reference_entry_id_list)]
+            if invalids:
+                self.visual.error("Invalid index(es): {}".format(invalids))
+            nums = [x for x in nums if x not in invalids]
             self.cached_selection = nums
             return nums
 
@@ -559,6 +565,17 @@ class Runner:
                 self.visual.up()
             elif command == self.commands.down:
                 self.visual.down()
+            elif command == self.commands.truncate:
+                # limit the number of results
+                num = utils.get_single_index(arg)
+                if not num:
+                    self.visual.error("Need number argument to apply result list truncation.")
+                    continue
+                self.max_search = num
+                self.max_list = num
+                # repeat last command, if applicable
+                if previous_command is not None:
+                    command = previous_command
             elif utils.is_index_list(command):
                 # print(self.reference_entry_id_list)
                 # for numeric input, select these entries
@@ -570,5 +587,4 @@ class Runner:
                 self.visual.message("Available: {}".format(self.commands))
             previous_command = command
         # end of loop
-        breakpoint()
         self.save_if_modified()

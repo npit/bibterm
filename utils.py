@@ -2,6 +2,15 @@ from collections import namedtuple
 import clipboard
 
 
+# get a single numeric from string
+def get_single_index(inp):
+    res = None
+    try:
+        res = int(inp)
+    except:
+        pass
+    return res
+
 # paste handler
 def paste(single_line=True):
     pasted_content = clipboard.paste()

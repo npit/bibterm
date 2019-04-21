@@ -60,7 +60,8 @@ def get_defaults(conf):
         "history_back": "hb",
         "history_forward": "hf",
         "history_change": "hc",
-        "tag": "t",
+        "limit": "tr",
+        "tag": "ta",
     }
     # controls that can act on selection(s)
     conf["selection_commands"] = ["list", "delete", "cite", "tag", "pdf_file", "pdf_web", "pdf_open"]
