@@ -62,7 +62,7 @@ class Runner:
         self.visual.log("Starting search")
         if self.search_invoke_counter > 0:
             # step to the starting history to search everything
-            self.jump_history(0)
+            self.reset_history()
         search_done = False
         just_began_search = True
         query_supplied = bool(query)
