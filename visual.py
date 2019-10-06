@@ -1,8 +1,11 @@
 import json
-import utils
+from itertools import combinations
+
 from blessed import Terminal
 from fuzzywuzzy import fuzz
-from itertools import combinations
+from terminaltables import AsciiTable
+
+import utils
 
 
 # base class to get and print stuff
@@ -12,6 +15,8 @@ def setup(conf):
         return Io.get_instance(conf)
     elif visual_name == Blessed.name:
         return Blessed.get_instance(conf)
+    elif visual_name == TermTables.name:
+        return TermTables.get_instance(conf)
     else:
         print("Undefined ui config:", visual_name)
         exit(1)
@@ -191,7 +196,9 @@ class Io:
 
     def ID_str(self, ID, maxlen_id):
         # return "{:<{w}s}".format("\\cite{" + ID + "}", w=maxlen_id + 7)
-        return "{:<{w}s}".format(ID, w=maxlen_id + 7)
+        if maxlen_id is not None:
+            return "{:<{w}s}".format(ID, w=maxlen_id + 7)
+        return ID
 
     def keyword_str(self, keywords):
         if keywords is None or not keywords:
@@ -295,9 +302,85 @@ class Io:
         pass
 
 
+
+class TermTables(Io):
+    name = "ttables"
+
+    def __init__(self, conf):
+        Io.__init__(self, conf)
+
+    def get_instance(conf=None):
+        if TermTables.instance is not None:
+            return TermTables.instance
+        if conf is None:
+            utils.error("Need configuration to instantiate visual")
+        print("Instantiating the {} ui".format(TermTables.name))
+        TermTables.instance = TermTables(conf)
+        return TermTables.instance
+
+    def gen_entry_strings(self, entry, maxlens=None):
+        # do not limit / pad lengths
+        return (self.ID_str(entry.ID, None), self.title_str(entry.title, len(entry.title)), self.keyword_str(entry.keywords))
+
+
+    def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False):
+        if self.only_debug and not self.do_debug:
+            return
+        if not x_iter:
+            return
+        entries_strings = self.gen_entries_strings(x_iter, additional_fields)
+        # strings = ["{} {} {}".format(*tup) for tup in entries_strings]
+        self.print_enum(entries_strings, at_most=at_most)
+        if print_newline:
+            self.newline()
+
+    def print_entry_contents(self, entry):
+        if self.only_debug and not self.do_debug:
+            return
+        self.print(self.get_entry_contents(entry))
+
+    def print_entries_contents(self, entries):
+        if self.only_debug and not self.do_debug:
+            return
+        for entry in entries:
+            self.print_entry_contents(entry)
+
+    def print_enum(self, x_iter, at_most=None, additionals=None):
+        if self.only_debug and not self.do_debug:
+            return
+        # check which items will be printed
+        if at_most and len(x_iter) > at_most:
+            idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]
+        else:
+            idxs_print = list(range(len(x_iter)))
+
+        x_iter = [[i+1] + list(x_iter[i]) for i in range(len(x_iter)) if i in idxs_print]
+        dots = ["..." for _ in x_iter[0]]
+        x_iter.insert(len(x_iter)-1, dots)
+
+
+        enum_idx, ids_idx, titles_idx = list(range(3))
+        table = AsciiTable([["", "id", "title", "tags"]] + x_iter)
+
+        while not table.ok:
+            # if no fit limit titles
+            max_titles = table.column_max_width(titles_idx)
+            if table.column_widths[ids_idx] > table.column_max_width(ids_idx):
+                max_titles -= table.column_widths[ids_idx] - table.column_max_width(ids_idx)
+            max_titles = max(max_titles, 4)
+            for r in range(len(x_iter)):
+                row = x_iter[r]
+                if len(row[titles_idx]) > max_titles:
+                    row[titles_idx] = row[titles_idx][:max_titles-3] + "..."
+                x_iter[r] = row
+            table = AsciiTable([["", "id", "title", "tags"]] + x_iter)
+        self.newline()
+        self.print(table.table)
+
 class Blessed(Io):
     name = "blessed"
     term = None
+
     instance = None
     search_cache = ""
     search_cache_underflow = None
