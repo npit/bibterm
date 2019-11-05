@@ -1,8 +1,11 @@
-from os.path import expanduser, join, exists, isfile, dirname
-from os import makedirs
 import json
-import utils
+from os import makedirs
+from os.path import dirname, exists, expanduser, isfile, join
+
 import clipboard
+
+import utils
+
 
 """
 Read configuration of the underlying bibtex database
@@ -68,7 +71,7 @@ def get_defaults(conf):
     conf["pdf_search"] = {"scholar": "https://scholar.google.com/scholar?hl=en&q=",
                           "scihub": "https://sci-hub.tw"}
     conf["actions"] = ["merge", "inspect"]
-    conf["visual"] = "default"
+    conf["visual"] = "ttables"
     conf["pdf_dir"] = join(dirname(conf["bib_path"]), "pdfs")
     return conf
 

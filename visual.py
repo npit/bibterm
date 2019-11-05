@@ -213,7 +213,7 @@ class Io:
     def enum(self, x_iter):
         return ["{} {}".format(self.num_str(i + 1, len(x_iter)), x_iter[i]) for i in range(len(x_iter))]
 
-    def print_enum(self, x_iter, at_most=None, additionals=None):
+    def print_enum(self, x_iter, at_most=None, additionals=None, header=None):
         if self.only_debug and not self.do_debug:
             return
         # check which items will be printed
@@ -276,15 +276,20 @@ class Io:
     def get_entry_contents(self, entry):
         if type(entry) != dict:
             entry = entry.get_pretty_dict()
-        st = json.dumps(entry, indent=2)
-        # remove enclosing {}
-        st = " " + st.strip()[1:-1].strip()
-        return st + " \n{}".format("_" * 15)
+        return entry
+        # st = json.dumps(entry, indent=2)
+        # # remove enclosing {}
+        # st = " " + st.strip()[1:-1].strip()
+        # return st + " \n{}".format("_" * 15)
 
     def print_entry_contents(self, entry):
         if self.only_debug and not self.do_debug:
             return
-        self.print(self.get_entry_contents(entry))
+        st = json.dumps(self.get_entry_contents(entry), indent=2)
+        # remove enclosing {}
+        st = " " + st.strip()[1:-1].strip()
+        st += st + " \n{}".format("_" * 15)
+        self.print(st)
 
     def print_entries_contents(self, entries):
         if self.only_debug and not self.do_debug:
@@ -322,7 +327,6 @@ class TermTables(Io):
         # do not limit / pad lengths
         return (self.ID_str(entry.ID, None), self.title_str(entry.title, len(entry.title)), self.keyword_str(entry.keywords))
 
-
     def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False):
         if self.only_debug and not self.do_debug:
             return
@@ -330,14 +334,9 @@ class TermTables(Io):
             return
         entries_strings = self.gen_entries_strings(x_iter, additional_fields)
         # strings = ["{} {} {}".format(*tup) for tup in entries_strings]
-        self.print_enum(entries_strings, at_most=at_most)
+        self.print_enum(entries_strings, at_most=at_most, header=["", "id", "title", "tags"])
         if print_newline:
             self.newline()
-
-    def print_entry_contents(self, entry):
-        if self.only_debug and not self.do_debug:
-            return
-        self.print(self.get_entry_contents(entry))
 
     def print_entries_contents(self, entries):
         if self.only_debug and not self.do_debug:
@@ -345,25 +344,39 @@ class TermTables(Io):
         for entry in entries:
             self.print_entry_contents(entry)
 
-    def print_enum(self, x_iter, at_most=None, additionals=None):
+
+    def print_entry_contents(self, entry):
+        if self.only_debug and not self.do_debug:
+            return
+        contents = self.get_entry_contents(entry)
+        contents = [["attribute", "value"]] + list(contents.items())
+        table = AsciiTable(contents)
+        # import ipdb; ipdb.set_trace()
+        self.print(table.table)
+
+
+    def print_enum(self, x_iter, at_most=None, additionals=None, header=None):
         if self.only_debug and not self.do_debug:
             return
         # check which items will be printed
-        if at_most and len(x_iter) > at_most:
+        if at_most is not None and len(x_iter) > at_most:
             idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]
+            dots = ["..." for _ in x_iter[0]]
         else:
             idxs_print = list(range(len(x_iter)))
+            dots = None
 
-        x_iter = [[i+1] + list(x_iter[i]) for i in range(len(x_iter)) if i in idxs_print]
-        dots = ["..." for _ in x_iter[0]]
-        x_iter.insert(len(x_iter)-1, dots)
-
+        x_iter = [[str(i+1)] + list(x_iter[i]) for i in range(len(x_iter)) if i in idxs_print]
+        if dots:
+            x_iter.insert(len(x_iter)-1, dots)
 
         enum_idx, ids_idx, titles_idx = list(range(3))
-        table = AsciiTable([["", "id", "title", "tags"]] + x_iter)
+        table = AsciiTable([header] + x_iter)
 
         while not table.ok:
             # if no fit limit titles
+            # import ipdb; ipdb.set_trace()
+            maxe_column_sizes = [table.column_max_width(k) for k in range(len(table.column_widths))]
             max_titles = table.column_max_width(titles_idx)
             if table.column_widths[ids_idx] > table.column_max_width(ids_idx):
                 max_titles -= table.column_widths[ids_idx] - table.column_max_width(ids_idx)

@@ -1,10 +1,13 @@
 from collections import namedtuple
-from reader import Reader
-from getter import Getter
-from visual import setup
+
+import clipboard
+
 import utils
 from editor import Editor
-import clipboard
+from getter import Getter
+from reader import Reader
+from visual import setup
+
 # do not use curses, try
 #     http: // urwid.org / tutorial /
 #     or
@@ -35,6 +38,7 @@ class Runner:
 
         # map commands
         ctrl_keys = conf.controls.keys()
+        self.commands_dict = conf.controls
         self.commands = namedtuple("controls", ctrl_keys)(*[conf.controls[k] for k in ctrl_keys])
 
         # search settings
@@ -578,7 +582,9 @@ class Runner:
                 self.get_editor().check_consistency(self.entry_collection)
             else:
                 self.visual.error("Undefined command: {}".format(command))
-                self.visual.message("Available: {}".format(self.commands))
+                self.visual.message("Available:")
+                skeys = sorted(self.commands_dict.keys())
+                self.visual.print_enum(list(zip(skeys, [self.commands_dict[k] for k in skeys])), at_most=None, header="action key".split())
             previous_command = command
         # end of loop
         self.save_if_modified()

@@ -7,6 +7,12 @@ import visual
 from utils import to_namedtuple, paste
 import clipboard
 
+# abstract for gui.
+# show screen
+# update screen
+# 
+# show table (impl for my manual shit, impl for terminaltables)
+# ...
 
 def merge(conf, vis, merge_args, string_data=None):
     copying_single_string = False
