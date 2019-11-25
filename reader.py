@@ -1,16 +1,17 @@
-import os
-import json
-import utils
-from collections import OrderedDict
-from stopwords import stopwords
-from os.path import exists, basename, join
-import bibtexparser
-from bibtexparser.bparser import BibTexParser
-from bibtexparser import customization
-import re
-from visual import setup
 import collections
+import json
+import os
+import re
+from collections import OrderedDict
+from os.path import basename, exists, join
 
+import bibtexparser
+from bibtexparser import customization
+from bibtexparser.bparser import BibTexParser
+
+import utils
+from stopwords import stopwords
+from visual import setup
 from writer import Writer
 
 
@@ -53,6 +54,14 @@ class EntryCollection:
             entry = bib_db.entries[i]
             ent = Entry(entry)
             self.insert(ent)
+        self.check_for_missing_fields()
+
+    def check_for_missing_fields(self):
+        for e in self.entries.values():
+            if not e.has_pages():
+                self.visual.error("Entry {} has no pages information".format(e.ID))
+            if not e.has_publisher():
+                self.visual.error("Entry {} has no publisher information".format(e.ID))
 
     def pdf_path_exists(self, path):
         return path in self.all_pdf_paths
@@ -410,16 +419,37 @@ class Entry:
     volume = None
     year = None
 
+    useful_keys = ["ENTRYTYPE", "ID", "author", "title", "year", "keywords", "file"]
+    shorthand_keys = ["ID", "author", "title"]
+    # keys to identify new arrivals
+    discovery_keys = ["title", "year", "author"]
+
+    @staticmethod
+    def from_dict(ddict):
+        e = Entry(ddict)
+        for k in 'bibtexKey'.split():
+            if k in ddict:
+                e.ID = ddict[k]
+                break
+        return e
+
+
     def __init__(self, kv):
         for key in kv:
             self.__setattr__(key, kv[key])
         self.raw_dict = kv
 
+    def get_raw_dict(self):
+        return self.raw_dict
     def has_file(self):
         return self.file is not None
 
     def has_keywords(self):
         return self.keywords is not None
+    def has_publisher(self):
+        return self.publisher is not None
+    def has_pages(self):
+        return self.pages is not None
 
     def has_keyword(self, kw):
         if not self.has_keywords():
@@ -438,9 +468,15 @@ class Entry:
         self.keywords = kw
         self.modified_collection = True
 
-    def get_pretty_dict(self, compact=True):
+    def get_discovery_view(self):
+        """Return only information to identify the paper"""
+        return list(self.get_pretty_dict(keys=Entry.discovery_keys).values())
+
+    def get_pretty_dict(self, compact=True, keys=None):
         d = OrderedDict()
-        for key in ["ENTRYTYPE", "ID", "author", "title", "year", "keywords", "file"]:
+        if keys is None:
+            keys = self.useful_keys
+        for key in keys:
             if key in self.raw_dict:
                 value = self.raw_dict[key]
                 if compact:
@@ -453,6 +489,11 @@ class Entry:
                 d[key] = value
         return d
 
+    def __str__(self):
+        keys = Entry.shorthand_keys
+        x = self.get_pretty_dict(compact=True, keys=keys)
+        keys = [k for k in keys if k in x.keys()]
+        return ". ".join(["{}: {}".format(k, x[k]) for k in keys])
 
 class Reader:
 
@@ -526,6 +567,18 @@ class Reader:
         else:
             self.tags_info = {"keep":[],"map":{}}
         return EntryCollection(db, self.tags_info)
+
+    # Read a collection of entries
+    def read_entry_list(self, elist):
+        if type(elist[0]) in (dict, OrderedDict):
+            entries = {}
+            for el in elist:
+                ent = Entry.from_dict(el)
+                entries[ent.ID] = ent
+            return entries
+        elif type(elist[0]) is str:
+            self.read_string("\n".join(elist))
+            return self.entry_collection.entries
 
     # Read from string
     def read_string(self, string):

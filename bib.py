@@ -1,11 +1,13 @@
-from runner import Runner
-from reader import Reader
-from writer import Writer
-from config import get_config, get_conf_filepath
 import argparse
-import visual
-from utils import to_namedtuple, paste
+
 import clipboard
+
+import visual
+from config import get_conf_filepath, get_config, update_config
+from reader import Reader
+from runner import Runner
+from utils import paste, to_namedtuple
+from writer import Writer
 
 # abstract for gui.
 # show screen
@@ -99,6 +101,8 @@ def main():
     if runner is None:
         runner = Runner(conf)
     runner.loop(input_cmd=input_cmd)
+    if runner.do_update_config:
+        update_config(runner.get_config_update())
 
 
 if __name__ == '__main__':

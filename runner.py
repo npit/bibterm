@@ -5,7 +5,7 @@ import clipboard
 import utils
 from editor import Editor
 from getter import Getter
-from reader import Reader
+from reader import Entry, Reader
 from visual import setup
 
 # do not use curses, try
@@ -19,6 +19,8 @@ class Runner:
     max_search = None
     max_list = None
     search_invoke_counter = None
+    do_update_config = False
+    config_update = []
 
     def __init__(self, conf, entry_collection=None):
         # assignments
@@ -134,7 +136,17 @@ class Runner:
     def get_getter(self):
         if self.getter is None:
             self.getter = Getter(self.conf)
+            upd_conf = self.getter.configure()
+            if upd_conf:
+                self.accumulate_config_updates(["pdf_search", "selected_api", self.getter.selected_api])
         return self.getter
+
+    def accumulate_config_updates(self, updc):
+        self.do_update_config = True
+        self.config_update.append(updc)
+
+    def get_config_update(self):
+        return self.config_update
 
     # singleton editor fetcher
     def get_editor(self):
@@ -499,16 +511,16 @@ class Runner:
                         if self.visual.yes_no("Search for pdf on the web?"):
                             self.search_web_pdf()
 
-            # fetching from google scholar
+            # fetch bibtexs from the web
             elif utils.matches(command, self.commands.get):
                 getter = self.get_getter()
                 if not arg:
-                    arg = self.visual.ask_user("Search what on google scholar?", multichar=True)
+                    arg = self.visual.ask_user("Search what on the web?", multichar=True)
                     if not arg:
                         self.visual.error("Nothing entered, aborting.")
                         continue
                 try:
-                    res = getter.get_gscholar(arg)
+                    res = getter.get_web_bibtex(arg)
                 except:
                     self.visual.error("Failed to complete the query.")
                     continue
@@ -517,13 +529,23 @@ class Runner:
                     continue
 
                 reader2 = Reader(self.conf)
-                reader2.read_string(res)
-                read_entries_dict = reader2.get_entry_collection().entries
-                self.visual.log("Retrieved entry item(s):")
-                self.visual.print_entries_contents(read_entries_dict.values())
+                read_entries_dict = reader2.read_entry_list(res)
+                self.visual.log("Retrieved entry item(s) from query [{}]".format(arg))
+
+                # select subset
+                if len(read_entries_dict) > 1:
+                    peruse_entries = list(zip(*[(e.ID, e.get_discovery_view()) for e in read_entries_dict.values()]))
+                    _, selected_ids = self.visual.user_multifilter(peruse_entries[1], header=Entry.discovery_keys, reference=peruse_entries[0])
+                    selected_entries = [v for (k, v) in read_entries_dict.items() if k in selected_ids]
+                else:
+                    selected_entries = list(read_entries_dict.values())
+
+
+                self.visual.print_entries_contents(selected_entries)
                 if not self.visual.yes_no("Store?"):
                     continue
-                for entry in read_entries_dict.values():
+                import ipdb; ipdb.set_trace()
+                for entry in selected_entries:
                     created = self.entry_collection.create(entry)
                 if not self.visual.yes_no("Select it?"):
                     continue
@@ -584,7 +606,7 @@ class Runner:
                 self.visual.error("Undefined command: {}".format(command))
                 self.visual.message("Available:")
                 skeys = sorted(self.commands_dict.keys())
-                self.visual.print_enum(list(zip(skeys, [self.commands_dict[k] for k in skeys])), at_most=None, header="action key".split())
+                self.visual.print_enum(list(zip(skeys, [self.commands_dict[k] for k in skeys])), at_most=None, header="- action key".split())
             previous_command = command
         # end of loop
         self.save_if_modified()

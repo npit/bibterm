@@ -1,9 +1,11 @@
 import json
 from itertools import combinations
 
+import terminaltables
 from blessed import Terminal
 from fuzzywuzzy import fuzz
 from terminaltables import AsciiTable
+from terminaltables.terminal_io import terminal_size
 
 import utils
 
@@ -125,7 +127,7 @@ class Io:
 
             opt_selection = [c[:num_letters_required] for c in opts]
             opt_print = ["[{}]{}".format(x[:num_letters_required], x[num_letters_required:]) for x in opts]
-            if default_option_idx is not None:
+            if default_option_idx:
                 # add asterisk on print
                 opt_print[default_option_idx] = self.default_option_mark + opt_print[default_option_idx]
             opt_print = " ".join(opt_print + explicit_opts)
@@ -162,6 +164,29 @@ class Io:
                 ans = ans.strip()
             # valid or no-option input
             return ans
+
+    def user_multifilter(self, collection, header, reference=None):
+        """Filtering function by user index selection. Reference can be used to keep track of input items"""
+        if reference is None:
+            reference = list(range(collection))
+
+        cur_reference, cur_collection = reference, collection
+        while True:
+            self.print_enum(cur_collection, header=header)
+            sel = self.ask_user("Modify the list via index")
+            sel = utils.get_index_list(sel, len(cur_collection))
+            if sel:
+                sel = sorted(set(sel))
+                cur_collection = [cur_collection[i-1] for i in sel]
+                cur_reference = [cur_reference[i-1] for i in sel]
+                self.print_enum(cur_collection, header=header)
+                if self.ask_user("Keep these?", "*yes no(reset)") == "yes":
+                    return cur_collection, cur_reference
+                else:
+                    cur_collection = collection
+                    cur_reference = reference
+            else:
+                return collection, reference
 
     def search(self, query, candidates, at_most, iterable_items=False):
         if iterable_items:
@@ -277,6 +302,9 @@ class Io:
         if type(entry) != dict:
             entry = entry.get_pretty_dict()
         return entry
+
+    def get_entry_details(self, entry):
+        return entry.get_raw_dict()
         # st = json.dumps(entry, indent=2)
         # # remove enclosing {}
         # st = " " + st.strip()[1:-1].strip()
@@ -314,11 +342,12 @@ class TermTables(Io):
     def __init__(self, conf):
         Io.__init__(self, conf)
 
+    @staticmethod
     def get_instance(conf=None):
         if TermTables.instance is not None:
             return TermTables.instance
         if conf is None:
-            utils.error("Need configuration to instantiate visual")
+            self.error("Need configuration to instantiate visual")
         print("Instantiating the {} ui".format(TermTables.name))
         TermTables.instance = TermTables(conf)
         return TermTables.instance
@@ -334,61 +363,124 @@ class TermTables(Io):
             return
         entries_strings = self.gen_entries_strings(x_iter, additional_fields)
         # strings = ["{} {} {}".format(*tup) for tup in entries_strings]
-        self.print_enum(entries_strings, at_most=at_most, header=["", "id", "title", "tags"])
+        self.print_enum(entries_strings, at_most=at_most, header=["id", "title", "tags"], preserve_col_idx=[0])
         if print_newline:
             self.newline()
 
-    def print_entries_contents(self, entries):
+    def print_entries_contents(self, entries, header=None):
+        """Function to print all available entry information in multiple rows"""
         if self.only_debug and not self.do_debug:
             return
-        for entry in entries:
-            self.print_entry_contents(entry)
+        if header is None:
+            header = ["attribute", "value"]
+        contents = [list(self.get_entry_details(cont).items()) for cont in entries]
+        self.print_multiline_items(contents, header)
 
+    def print_multiline_items(self, items, header):
+        """Print single-column (plus enumeration) multiline items"""
+        header = ["idx"] + header
+        table_contents = [header]
+        if len(header) != len(table_contents[0]):
+            self.error("Header length mismatch!")
+            return
+        num = 0
+        import ipdb; ipdb.set_trace()
+        for item in items:
+            num += 1
+            attributes, values = [], []
+            for (name, value) in item:
+                attributes.append(str(name))
+                values.append(str(value))
+            table_contents.append([str(num), "\n".join(attributes).strip(), "\n".join(values).strip()])
+        self.print(self.get_table(table_contents, preserve_col_idx=[0], inner_border=True))
+
+    def get_table(self, contents, preserve_col_idx=[], inner_border=False):
+        table = self.fit_table(AsciiTable(contents), preserve_col_idx)
+        if inner_border:
+            table.inner_row_border = True
+        return table.table
 
     def print_entry_contents(self, entry):
         if self.only_debug and not self.do_debug:
             return
         contents = self.get_entry_contents(entry)
         contents = [["attribute", "value"]] + list(contents.items())
-        table = AsciiTable(contents)
-        # import ipdb; ipdb.set_trace()
-        self.print(table.table)
+        self.print(self.get_table(contents).table)
 
 
-    def print_enum(self, x_iter, at_most=None, additionals=None, header=None):
+    def fit_table(self, table, preserve_col_idx=None):
+        change_col_idx = range(len(table.table_data[0]))
+        if preserve_col_idx is not None:
+            change_col_idx = [i for i in change_col_idx if i not in preserve_col_idx]
+            change_col_idx = sorted(change_col_idx, reverse=True)
+
+        while not table.ok:
+            data = table.table_data
+            if not change_col_idx:
+                self.fatal_error("Table does not fit but no changeable columns defined.")
+            widths = [[len(x) for x in row] for row in data]
+            zwidths = list(zip(*widths))
+            # med = zwidths[len(zwidths)//2]
+            # mean_lengths = [sum(x)/len(x) for x in zwidths]
+            # anything larger than 2 * the median, prune it
+            termwidth = terminal_size()[0]
+            maxwidths = [max(z) for z in zwidths]
+            max_column_sizes = [table.column_max_width(k) for k in range(len(data[0]))]
+            # calc the required reduction; mx is negative for overflows
+            # max_size_per_col = [mw - mcs if mcs < 0 else mw for (mw, mcs) in zip(maxwidths, max_column_sizes)]
+            # get widths for each row
+            for col in change_col_idx:
+                max_sz = max_column_sizes[col]
+                if max_sz < 0:
+                    # column's ok
+                    continue
+                for row, row_widths in enumerate(widths):
+                    col_width = row_widths[col]
+                    if col_width > max_sz:
+                        # prune the corresponding column
+                        data[row][col] = self.prune_string(data[row][col], max_sz)
+                        widths[row][col] = len(data[row][col])
+            table = AsciiTable(data)
+        return table
+
+    def prune_string(self, content, prune_to=None, repl="..."):
+        if prune_to is not None:
+            content = content[:prune_to]
+        return content[:max(0,len(content) - len(repl))] + repl
+
+    def print_enum(self, x_iter, at_most=None, additionals=None, header=None, preserve_col_idx=None):
+        """Print collection, with a numeric column per line"""
+        if preserve_col_idx is None:
+            preserve_col_idx = []
         if self.only_debug and not self.do_debug:
             return
         # check which items will be printed
         if at_most is not None and len(x_iter) > at_most:
             idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]
-            dots = ["..." for _ in x_iter[0]]
+            dots = ["..."] * (len(x_iter[0]) + 1) # +1 for the enumeration
         else:
             idxs_print = list(range(len(x_iter)))
             dots = None
 
-        x_iter = [[str(i+1)] + list(x_iter[i]) for i in range(len(x_iter)) if i in idxs_print]
+        table_data = []
+        for i, row in enumerate(x_iter):
+            if i in idxs_print:
+                try:
+                    len(row)
+                except:
+                    row = [row]
+                row = [str(r) for r in row]
+                table_data.append([str(i+1)] + row)
         if dots:
-            x_iter.insert(len(x_iter)-1, dots)
+            table_data.insert(len(table_data)-1, dots)
 
-        enum_idx, ids_idx, titles_idx = list(range(3))
-        table = AsciiTable([header] + x_iter)
+        if header:
+            table_data = [["idx"] +  header] + table_data
+        preserve_col_idx = [0] + [p+1 for p in preserve_col_idx]
+        table = self.get_table(table_data, preserve_col_idx=preserve_col_idx)
 
-        while not table.ok:
-            # if no fit limit titles
-            # import ipdb; ipdb.set_trace()
-            maxe_column_sizes = [table.column_max_width(k) for k in range(len(table.column_widths))]
-            max_titles = table.column_max_width(titles_idx)
-            if table.column_widths[ids_idx] > table.column_max_width(ids_idx):
-                max_titles -= table.column_widths[ids_idx] - table.column_max_width(ids_idx)
-            max_titles = max(max_titles, 4)
-            for r in range(len(x_iter)):
-                row = x_iter[r]
-                if len(row[titles_idx]) > max_titles:
-                    row[titles_idx] = row[titles_idx][:max_titles-3] + "..."
-                x_iter[r] = row
-            table = AsciiTable([["", "id", "title", "tags"]] + x_iter)
         self.newline()
-        self.print(table.table)
+        self.print(table)
 
 class Blessed(Io):
     name = "blessed"
@@ -865,28 +957,3 @@ class Blessed(Io):
         highest_viewport_top = len(self.data_buffer) - self.data_buffer_size
         self.set_viewport(min(highest_viewport_top, self.viewport_top + 1))
         self.message("highest vp {}" + str(highest_viewport_top))
-
-
-if __name__ == '__main__':
-    print("Do it.")
-    t = Terminal()
-    inp = ""
-    while True:
-        with t.cbreak():
-            # c = self.term.inkey()
-            # sys.stderr.write("{} {} ".format(x, y))
-            with t.cbreak():
-                c = t.inkey()
-            if c.is_sequence:
-                # self.temp_print("got sequence: {0}, when inp is: [{1}].".format((str(c), c.name, c.code), inp), 30, 6)
-                if c.name == "KEY_DELETE":
-                    with t.location(2, 10):
-                        print(t.clear_eol())
-                    inp = inp[:-1]
-                if c.name == "KEY_ENTER":
-                    break
-            else:
-                inp += c
-
-            with t.location(2, 10):
-                print(inp)

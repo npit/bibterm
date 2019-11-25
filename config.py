@@ -105,3 +105,15 @@ def get_config():
     # restore copied data
     clipboard.copy(copied_data)
     return conf
+
+
+def update_config(updlist):
+    config = get_config()
+    for bundle in updlist:
+        curr_dict = config
+        print("Setting update:", bundle)
+        while len(bundle) > 2:
+            key = bundle.pop(0)
+            curr_dict = curr_dict[key]
+        key, val = bundle
+        curr_dict[key] = val
