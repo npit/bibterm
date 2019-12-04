@@ -504,7 +504,10 @@ class Reader:
         self.visual = setup(conf)
         Entry.visual = self.visual
         EntryCollection.visual = self.visual
-        self.bib_path = conf.bib_path
+        try:
+            self.bib_path = conf.user_settings["bib_path"]
+        except KeyError:
+            self.visual.fatal_error("No bib_path set in user_settings!")
         self.tags_path = os.path.splitext(self.bib_path)[0] + ".tags.json"
         self.temp_dir = "/tmp/bib/"
         os.makedirs(self.temp_dir, exist_ok=True)

@@ -1,6 +1,7 @@
+import bibtexparser
+
 import utils
 from visual import setup
-import bibtexparser
 
 
 class Writer:
@@ -12,8 +13,11 @@ class Writer:
         Adds copied bibtex entry to bibtex file
         """
         self.conf = conf
-        self.bib_path = conf.bib_path
         self.visual = setup(conf)
+        try:
+            self.bib_path = conf.user_settings["bib_path"]
+        except KeyError:
+            self.visual.fatal_error("No bib path defined in the user settings!")
 
     # merge bib file to database
     def merge(self, entry_collection, other_collection):

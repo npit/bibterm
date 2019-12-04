@@ -1,6 +1,8 @@
-from visual import setup
-import utils
 import os
+
+import utils
+from visual import setup
+
 
 class Editor:
 
@@ -10,7 +12,7 @@ class Editor:
         self.collection_modified = False
         self.clear_cache()
         if conf.pdf_dir is None:
-            self.pdf_dir = os.path.join(os.path.dirname(self.conf.bib_path), "pdfs")
+            self.pdf_dir = os.path.join(os.path.dirname(self.conf.user_settings.bib_path), "pdfs")
         else:
             self.pdf_dir = conf.pdf_dir
 

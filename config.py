@@ -68,11 +68,14 @@ def get_defaults(conf):
     # controls that can act on selection(s)
     conf["selection_commands"] = ["list", "delete", "cite", "tag", "pdf_file", "pdf_web", "pdf_open"]
 
-    conf["pdf_search"] = {"scholar": "https://scholar.google.com/scholar?hl=en&q=",
-                          "scihub": "https://sci-hub.tw"}
+    conf["pdf_search"] = {
+        "gscholar": "https://scholar.google.com/scholar?hl=en&q=",
+        "scihub": "https://sci-hub.tw", "scholarly":"",
+        "bibsonomy": ["https://www.bibsonomy.org/search/", "username", "api_key"]}
     conf["actions"] = ["merge", "inspect"]
     conf["visual"] = "ttables"
     conf["pdf_dir"] = join(dirname(conf["bib_path"]), "pdfs")
+    conf["user_settings"] = {}
     return conf
 
 

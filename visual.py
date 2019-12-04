@@ -384,7 +384,6 @@ class TermTables(Io):
             self.error("Header length mismatch!")
             return
         num = 0
-        import ipdb; ipdb.set_trace()
         for item in items:
             num += 1
             attributes, values = [], []

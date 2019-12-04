@@ -4,7 +4,7 @@ import clipboard
 
 import utils
 from editor import Editor
-from getter import Getter
+from getters.getter import Getter
 from reader import Entry, Reader
 from visual import setup
 
@@ -361,7 +361,7 @@ class Runner:
             return
         entry = self.entry_collection.entries[self.reference_entry_id_list[nums[0] - 1]]
         if entry.file is not None:
-            if not self.visual.yes_no("Pdf path exists: {}, replace?".format(entry.file), default_yes=False):
+            if not self.visual.yes_no("Pdf attribute exists: {}, replace?".format(entry.file), default_yes=False):
                 return
         updated_entry = self.get_editor().set_file(entry)
         if self.editor.collection_modified and updated_entry is not None:
@@ -376,7 +376,7 @@ class Runner:
         entry_id = self.reference_entry_id_list[nums[0] - 1]
         entry = self.entry_collection.entries[entry_id]
         if entry.file is not None:
-            if not self.visual.yes_no("Pdf path exists: {}, replace?".format(entry.file), default_yes=False):
+            if not self.visual.yes_no("Pdf attribute exists: {}, replace?".format(entry.file), default_yes=False):
                 return
         getter = Getter(self.conf)
         pdf_url = self.visual.ask_user("Give pdf url to download", multichar=True)
@@ -395,7 +395,7 @@ class Runner:
         entry_id = self.reference_entry_id_list[nums[0] - 1]
         entry = self.entry_collection.entries[entry_id]
         if entry.file is not None:
-            if not self.visual.yes_no("Pdf path exists: {}, replace?".format(entry.file), default_yes=False):
+            if not self.visual.yes_no("Pdf attribute exists: {}, replace?".format(entry.file), default_yes=False):
                 return
         pdf_path = self.get_getter().search_web_pdf(entry_id, entry.title)
         if not pdf_path:
@@ -521,8 +521,8 @@ class Runner:
                         continue
                 try:
                     res = getter.get_web_bibtex(arg)
-                except:
-                    self.visual.error("Failed to complete the query.")
+                except Exception as ex:
+                    self.visual.error("Failed to complete the query: {}.".format(ex))
                     continue
                 if not res:
                     self.visual.error("No data retrieved.")
@@ -544,7 +544,6 @@ class Runner:
                 self.visual.print_entries_contents(selected_entries)
                 if not self.visual.yes_no("Store?"):
                     continue
-                import ipdb; ipdb.set_trace()
                 for entry in selected_entries:
                     created = self.entry_collection.create(entry)
                 if not self.visual.yes_no("Select it?"):
