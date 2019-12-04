@@ -1,18 +1,20 @@
-from runner import Runner
-from reader import Reader
-from writer import Writer
-from config import get_config, get_conf_filepath
 import argparse
-from collections import namedtuple
-import visual
+
 import clipboard
 
+import visual
+from config import get_conf_filepath, get_config, update_config
+from reader import Reader
+from runner import Runner
+from utils import paste, to_namedtuple
+from writer import Writer
 
-def to_namedtuple(conf_dict):
-    keys = sorted(conf_dict.keys())
-    conf = namedtuple("conf", keys)(*[conf_dict[k] for k in keys])
-    return conf
-
+# abstract for gui.
+# show screen
+# update screen
+# 
+# show table (impl for my manual shit, impl for terminaltables)
+# ...
 
 def merge(conf, vis, merge_args, string_data=None):
     copying_single_string = False
@@ -25,7 +27,7 @@ def merge(conf, vis, merge_args, string_data=None):
         reader2.read(merge_args[0])
     else:
         vis.print("Merging copied content.")
-        reader2.read_string(clipboard.paste())
+        reader2.read_string(paste(single_line=False))
     if len(reader2.get_entry_collection().entries) == 0:
         vis.print("Zero items extracted from the collection to merge, exiting.")
         return
@@ -60,10 +62,14 @@ def main():
     parser = argparse.ArgumentParser(description="\n".join(help_str))
     parser.add_argument("actions", nargs="*", help="Available: {}".format(", ".join(conf_dict["actions"])))
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode.")
+    parser.add_argument("-u", "--ui", dest="ui", help="Override user interface type.")
     parser_args = parser.parse_args()
 
     conf_dict["debug"] = parser_args.debug
-    conf = to_namedtuple(conf_dict)
+    if parser_args.ui is not None:
+        conf_dict["visual"] = parser_args.ui
+
+    conf = to_namedtuple(conf_dict, "conf")
     vis = visual.setup(conf)
     runner, input_cmd = None, None
 
@@ -95,6 +101,9 @@ def main():
     if runner is None:
         runner = Runner(conf)
     runner.loop(input_cmd=input_cmd)
+    if runner.do_update_config:
+        update_config(runner.get_config_update())
+
 
 if __name__ == '__main__':
     main()

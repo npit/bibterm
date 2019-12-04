@@ -1,6 +1,7 @@
+import bibtexparser
+
 import utils
 from visual import setup
-import bibtexparser
 
 
 class Writer:
@@ -12,8 +13,11 @@ class Writer:
         Adds copied bibtex entry to bibtex file
         """
         self.conf = conf
-        self.bib_path = conf.bib_path
         self.visual = setup(conf)
+        try:
+            self.bib_path = conf.user_settings["bib_path"]
+        except KeyError:
+            self.visual.fatal_error("No bib path defined in the user settings!")
 
     # merge bib file to database
     def merge(self, entry_collection, other_collection):
@@ -36,7 +40,7 @@ class Writer:
             #     entry = entry_collection.entries[ID]
             #     self.visual.print("{} {}".format(self.visual.ID_str(entry.ID, entry_collection.maxlen_id), self.visual.title_str(entry.title, entry_collection.maxlen_title)))
 
-            what = self.visual.input("Duplicates exist, what do?", "replace omit *abort")
+            what = self.visual.ask_user("Duplicates exist, what do?", "replace omit *abort")
             if utils.matches(what, "abort"):
                 self.visual.print("Aborting.")
                 exit(1)
@@ -51,28 +55,30 @@ class Writer:
             self.visual.print("Nothing left to merge.")
             return None
         # insert them
-        self.visual.print("Proceeding to insert {} entries:".format(len(ids_to_insert)))
-        for i, ID in enumerate(ids_to_insert):
-            entry = other_collection.entries[ID]
-            strs = self.visual.gen_entry_enum_strings(entry, other_collection.maxlens(ids_to_insert), i + 1, len(ids_to_insert))
-            self.visual.print("Inserting {} {} {}".format(*strs))
-            entry_collection.create(entry)
+        if ids_to_insert:
+            self.visual.print("Proceeding to insert {} entries:".format(len(ids_to_insert)))
+            for i, ID in enumerate(ids_to_insert):
+                entry = other_collection.entries[ID]
+                strs = self.visual.gen_entry_enum_strings(entry, other_collection.maxlens(ids_to_insert), i + 1, len(ids_to_insert))
+                self.visual.print("Inserting {} {} {}".format(*strs))
+                entry_collection.create(entry)
 
-        self.visual.print("Proceeding to replace {} entries:".format(len(ids_to_replace)))
-        for i, ID in enumerate(ids_to_replace):
-            entry = other_collection.entries[ID]
-            strs = self.visual.gen_entry_enum_strings(entry, other_collection, i + 1, len(ids_to_insert))
-            self.visual.print("Inserting {} {} {}".format(*strs))
-            entry_collection.replace(entry)
+        if ids_to_replace:
+            self.visual.print("Proceeding to replace {} entries:".format(len(ids_to_replace)))
+            for i, ID in enumerate(ids_to_replace):
+                entry = other_collection.entries[ID]
+                strs = self.visual.gen_entry_enum_strings(entry, other_collection, i + 1, len(ids_to_insert))
+                self.visual.print("Inserting {} {} {}".format(*strs))
+                entry_collection.replace(entry)
         return entry_collection
 
     def write(self, entry_collection):
-        self.visual.print("Writing {} items to {}".format(len(entry_collection.bibtex_db.entries), self.bib_path))
+        self.visual.log("Writing {} items to {}".format(len(entry_collection.bibtex_db.entries), self.bib_path))
         with open(self.bib_path, "w") as f:
             bibtexparser.dump(entry_collection.get_writable_db(), f)
 
     def write_confirm(self, entry_collection):
-        what = self.visual.input("Proceed to write?", "*yes no")
+        what = self.visual.yes_no("Proceed to write?")
         if utils.matches(what, "yes"):
             self.write(entry_collection)
             self.visual.print("Wrote!")

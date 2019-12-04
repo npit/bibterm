@@ -1,16 +1,17 @@
-import os
-import json
-import utils
-from collections import OrderedDict
-from stopwords import stopwords
-from os.path import exists, basename, join
-import bibtexparser
-from bibtexparser.bparser import BibTexParser
-from bibtexparser import customization
-import re
-from visual import setup
 import collections
+import json
+import os
+import re
+from collections import OrderedDict
+from os.path import basename, exists, join
 
+import bibtexparser
+from bibtexparser import customization
+from bibtexparser.bparser import BibTexParser
+
+import utils
+from stopwords import stopwords
+from visual import setup
 from writer import Writer
 
 
@@ -21,6 +22,7 @@ class EntryCollection:
     entries_fixed = 0
     modified_collection = False
     keyword_override_action = None
+    all_pdf_paths = []
 
     def get_tag_information(self):
         return {"keep": list(self.keyword2id.keys()), "map": self.keywords_map}
@@ -44,8 +46,7 @@ class EntryCollection:
         all_ids = [x["ID"] for x in bib_db.entries]
         duplicates = [item for item, count in collections.Counter(all_ids).items() if count > 1]
         if duplicates:
-            self.visual.print("{} duplicates found:\n{}\n".format(len(duplicates), "\n".join(duplicates)))
-            self.visual.print("Fix them first, bye!")
+            self.visual.error("{} duplicates found in the collection - fix them.\n{}".format(len(duplicates), "\n".join(duplicates)))
             exit(1)
 
         for i in range(len(bib_db.entries)):
@@ -53,7 +54,17 @@ class EntryCollection:
             entry = bib_db.entries[i]
             ent = Entry(entry)
             self.insert(ent)
+        self.check_for_missing_fields()
 
+    def check_for_missing_fields(self):
+        for e in self.entries.values():
+            if not e.has_pages():
+                self.visual.error("Entry {} has no pages information".format(e.ID))
+            if not e.has_publisher():
+                self.visual.error("Entry {} has no publisher information".format(e.ID))
+
+    def pdf_path_exists(self, path):
+        return path in self.all_pdf_paths
     # check if num in [1, num_entries]
     def num_in_range(self, num):
         return (num >= 1 and num <= len(self.entries))
@@ -78,7 +89,7 @@ class EntryCollection:
         del self.bibtex_db.entries_dict[ID]
         idx = [i for i in range(len(self.bibtex_db.entries)) if self.bibtex_db.entries[i]["ID"] == ID]
         if len(idx) > 1:
-            self.visual.print("Mutiple indexes with ID {} found to remove.".format(ID))
+            self.visual.error("Mutiple indexes with ID {} found to remove.".format(ID))
             exit(1)
         del self.bibtex_db.entries[idx[0]]
         # containers
@@ -88,6 +99,7 @@ class EntryCollection:
         self.id_list.remove(ID)
         self.title_list.remove(title)
         del self.title2id[title]
+        self.modified_collection = True
 
     def replace(self, ent):
         # keep copies of id and title lists to preserve order
@@ -108,10 +120,10 @@ class EntryCollection:
 
     def correct_id(self, current_id, expected_id):
         # id
-        self.visual.print("Correcting {}/{} (#{} fixed, {} fixes) id {} -> {}.".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, current_id, expected_id))
+        self.visual.log("Correcting {}/{} (#{} fixed, {} fixes) id {} -> {}.".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, current_id, expected_id))
         # entries dict
         if expected_id in self.bibtex_db.entries_dict:
-            self.visual.print("Correcting {} to {exp}, but {exp} already exists in underlying bibtex db.".format(current_id, exp=expected_id))
+            self.visual.log("Correcting {} to {exp}, but {exp} already exists in underlying bibtex db.".format(current_id, exp=expected_id))
             exit(1)
         # assign the new dict key
         self.bibtex_db.entries_dict[expected_id] = self.bibtex_db.entries_dict[current_id]
@@ -131,7 +143,7 @@ class EntryCollection:
 
     def change_keyword(self, kw, new_kws, entry_id):
         if kw in self.keywords_map and self.keywords_map[kw] != new_kws:
-            self.visual.print("Specified different mapping: {} to existing one: {}, for encountered keyword: {}".format(kw, self.keywords_map[kw], new_kws))
+            self.visual.log("Specified different mapping: {} to existing one: {}, for encountered keyword: {}".format(kw, self.keywords_map[kw], new_kws))
 
         self.keywords_map[kw] = new_kws
         for nkw in new_kws:
@@ -152,7 +164,7 @@ class EntryCollection:
                 continue
             if kw != raw_kw:
                 self.fixes += 1
-                self.visual.print("Correcting {}/{} (#{} fixed, {} fixes) [keyword] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, raw_kw, kw))
+                self.visual.log("Correcting {}/{} (#{} fixed, {} fixes) [keyword] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, raw_kw, kw))
                 applied_changes = True
             # filter out rejected ones
             if kw in self.keywords_discard:
@@ -173,16 +185,16 @@ class EntryCollection:
         while keywords:
             self.visual.print_enum(keywords)
             if self.keyword_override_action is None:
-                what = self.visual.input("Process keywords for entry [{}] ".format(index_id),
+                what = self.visual.ask_user("Process keywords for entry [{}] ".format(index_id),
                                          "Keep-all Discard-all *keep discard change #1 #2 #... #|  #*all ", check=False)
                 cmd, *idx_args = what.strip().split()
-                idx_list = [i - 1 for i in utils.get_index_list(idx_args)]
+                idx_list = [i - 1 for i in utils.get_index_list(idx_args, len(keywords))]
                 if not idx_list:
                     idx_list = range(len(keywords))
                 elif utils.matches(cmd, 'all'):
                     idx_list = range(len(keywords))
             else:
-                self.visual.print("Applying action to all entries & keywords: {}".format(self.keyword_override_action))
+                self.visual.log("Applying action to all entries & keywords: {}".format(self.keyword_override_action))
                 cmd, idx_list = self.keyword_override_action, range(len(keywords))
 
             if utils.matches(cmd, "keep"):
@@ -192,7 +204,7 @@ class EntryCollection:
                     keywords_final.append(keywords[i])
             elif utils.matches(cmd, "change"):
                 applied_changes = True
-                new_kws = self.visual.input("Change keywords: {} to what?".format([keywords[i] for i in idx_list]))
+                new_kws = self.visual.ask_user("Change keywords: {} to what?".format([keywords[i] for i in idx_list]))
                 new_kws = new_kws.strip().split()
                 for i in idx_list:
                     self.change_keyword(keywords[i], new_kws, index_id)
@@ -208,7 +220,7 @@ class EntryCollection:
                 self.keyword_override_action = "discard"
                 continue
             else:
-                self.visual.print("Invalid input.")
+                self.visual.error("Invalid input.")
                 continue
             # remove used up indexes
             keywords = [keywords[i] for i in range(len(keywords)) if i not in idx_list]
@@ -252,7 +264,7 @@ class EntryCollection:
             title_first = re.sub('[^a-zA-Z]+', '', title_first)
             expected_id = "{}{}{}".format(authorname, year, title_first)
             if ID != expected_id:
-                if self.need_fix(ID, "id mismatch: {}".format(expected_id)):
+                if self.need_fix(ID, "expected id: {}".format(expected_id)):
                     # correct the citation id
                     self.fixes += 1
                     self.correct_id(ID, expected_id)
@@ -269,13 +281,13 @@ class EntryCollection:
                     self.bibtex_db.entries[i]["keywords"] = kw_str
         # fix title
         if title != title.strip() or title.strip()[-1] == ".":
-            if self.need_fix(ID, "title artifacts"):
+            if self.need_fix(ID, "title artifacts: '{}'".format(title)):
                 # make the correct title
                 title = title.strip()
                 if title[-1] == ".":
                     title = title[:-1]
                 self.fixes += 1
-                self.visual.print("Correcting {}/{} (#{} fixed, {} fixes) [title] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, ent.title, title))
+                self.visual.log("Correcting {}/{} (#{} fixed, {} fixes) [title] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, ent.title, title))
                 # set it to the bibtex dict
                 self.bibtex_db.entries_dict[ID]["title"] = title
                 # set it to the bibtex list
@@ -294,7 +306,7 @@ class EntryCollection:
     def need_fix(self, entry_id, problem):
         fix = False
         if self.do_fix is None:
-            what = self.visual.input("Fix entry problem: [{} : {}]?".format(entry_id, problem), "yes no *Yes-all No-all")
+            what = self.visual.ask_user("Fix entry problem: [{} : {}]?".format(entry_id, problem), "yes no *Yes-all No-all")
             if utils.matches(what, "Yes-all"):
                 self.do_fix = True
             if utils.matches(what, "No-all"):
@@ -305,7 +317,9 @@ class EntryCollection:
         return fix
 
     def create(self, ent, position=None):
-        self.insert(ent, can_fix=False)
+        inserted = self.insert(ent, can_fix=False)
+        if not inserted:
+            return False
         if position is None:
             self.bibtex_db.entries.append(ent.raw_dict)
         else:
@@ -317,6 +331,7 @@ class EntryCollection:
             # self.visual.warn("Non existing ID on bibtex dict: {}, adding.".format(ent.ID))
             self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
         self.modified_collection = True
+        return True
 
     def insert(self, ent, can_fix=True):
         if can_fix:
@@ -325,8 +340,8 @@ class EntryCollection:
         title = ent.title.lower()
         # update object lookup dict
         if ID in self.entries:
-            self.visual.print("Entry with id {} already in entries dict!".format(ID))
-            exit(1)
+            self.visual.error("Entry with id {} already in entries dict!".format(ID))
+            return False
         self.entries[ID] = ent
         # update title-id mapping
         self.title2id[title] = ID
@@ -338,6 +353,9 @@ class EntryCollection:
             self.maxlen_id = len(ent.ID)
         if len(ent.title) > self.maxlen_title:
             self.maxlen_title = len(ent.title)
+        if ent.file:
+            self.all_pdf_paths.append(ent.file)
+        return True
 
     def find_ID_(self, thelist, ID):
         for i in range(len(self.entries)):
@@ -361,11 +379,16 @@ class EntryCollection:
 
     def stringify(self, value, key):
         joiner = " and " if key == "author" else ", "
-        value = joiner.join(value)
-        return re.sub("[{}]", "", value)
+        value = joiner.join(value).strip()
+        if value.endswith(","):
+            value = value[:-1]
+        return value.strip()
 
     def reset_modified(self):
         self.modified_collection = False
+
+    def set_modified(self):
+        self.modified_collection = True
 
     # overwrite collection to the file specified by the configuration
     def overwrite_file(self, conf):
@@ -396,16 +419,37 @@ class Entry:
     volume = None
     year = None
 
+    useful_keys = ["ENTRYTYPE", "ID", "author", "title", "year", "keywords", "file"]
+    shorthand_keys = ["ID", "author", "title"]
+    # keys to identify new arrivals
+    discovery_keys = ["title", "year", "author"]
+
+    @staticmethod
+    def from_dict(ddict):
+        e = Entry(ddict)
+        for k in 'bibtexKey'.split():
+            if k in ddict:
+                e.ID = ddict[k]
+                break
+        return e
+
+
     def __init__(self, kv):
         for key in kv:
             self.__setattr__(key, kv[key])
         self.raw_dict = kv
 
+    def get_raw_dict(self):
+        return self.raw_dict
     def has_file(self):
         return self.file is not None
 
     def has_keywords(self):
         return self.keywords is not None
+    def has_publisher(self):
+        return self.publisher is not None
+    def has_pages(self):
+        return self.pages is not None
 
     def has_keyword(self, kw):
         if not self.has_keywords():
@@ -418,20 +462,38 @@ class Entry:
     def set_file(self, file_path):
         self.raw_dict["file"] = file_path
         self.file = file_path
-        self.modified_collection = True
 
     def set_keywords(self, kw):
         self.raw_dict["keywords"] = kw
         self.keywords = kw
         self.modified_collection = True
 
-    def get_pretty_dict(self):
+    def get_discovery_view(self):
+        """Return only information to identify the paper"""
+        return list(self.get_pretty_dict(keys=Entry.discovery_keys).values())
+
+    def get_pretty_dict(self, compact=True, keys=None):
         d = OrderedDict()
-        for key in ["ENTRYTYPE", "ID", "author", "title", "year", "keywords", "file"]:
+        if keys is None:
+            keys = self.useful_keys
+        for key in keys:
             if key in self.raw_dict:
-                d[key] = self.raw_dict[key]
+                value = self.raw_dict[key]
+                if compact:
+                    # concat. list into a string to display in a single line
+                    if type(value) == list:
+                        value = " ".join(value).strip()
+                    # skip empty values
+                    if not value:
+                        continue
+                d[key] = value
         return d
 
+    def __str__(self):
+        keys = Entry.shorthand_keys
+        x = self.get_pretty_dict(compact=True, keys=keys)
+        keys = [k for k in keys if k in x.keys()]
+        return ". ".join(["{}: {}".format(k, x[k]) for k in keys])
 
 class Reader:
 
@@ -442,7 +504,10 @@ class Reader:
         self.visual = setup(conf)
         Entry.visual = self.visual
         EntryCollection.visual = self.visual
-        self.bib_path = conf.bib_path
+        try:
+            self.bib_path = conf.user_settings["bib_path"]
+        except KeyError:
+            self.visual.fatal_error("No bib_path set in user_settings!")
         self.tags_path = os.path.splitext(self.bib_path)[0] + ".tags.json"
         self.temp_dir = "/tmp/bib/"
         os.makedirs(self.temp_dir, exist_ok=True)
@@ -485,7 +550,7 @@ class Reader:
                 if line.startswith("%"):
                     # skip it
                     if not applied_changes:
-                        self.visual.print("Deleting commented lines.")
+                        self.visual.log("Deleting commented lines.")
                     applied_changes = True
                     continue
                 newlines.append(line)
@@ -499,9 +564,24 @@ class Reader:
         return bib_path
 
     def load_collection(self, db):
-        with open(self.tags_path) as f:
-            self.tags_info = json.load(f)
+        if os.path.exists(self.tags_path):
+            with open(self.tags_path) as f:
+                self.tags_info = json.load(f)
+        else:
+            self.tags_info = {"keep":[],"map":{}}
         return EntryCollection(db, self.tags_info)
+
+    # Read a collection of entries
+    def read_entry_list(self, elist):
+        if type(elist[0]) in (dict, OrderedDict):
+            entries = {}
+            for el in elist:
+                ent = Entry.from_dict(el)
+                entries[ent.ID] = ent
+            return entries
+        elif type(elist[0]) is str:
+            self.read_string("\n".join(elist))
+            return self.entry_collection.entries
 
     # Read from string
     def read_string(self, string):
@@ -510,40 +590,36 @@ class Reader:
         parser = BibTexParser()
         parser.customization = Reader.customizations
         db = bibtexparser.loads(string, parser=parser)
-        self.visual.print("Loaded {} entries from supplied string.".format(len(db.entries)))
+        self.visual.log("Loaded {} entries from supplied string.".format(len(db.entries)))
         self.entry_collection = self.load_collection(db)
 
     # Read bibtex file, preprocessing out comments
     def read(self, input_file=None):
         if input_file is None:
             input_file = self.preprocess(self.bib_path)
-        self.visual.print("Reading from file {}.".format(input_file))
+        self.visual.log("Reading from file {}.".format(input_file))
         if not exists(input_file):
-            self.visual.print("File {} does not exist.".format(input_file))
+            self.visual.error("File {} does not exist.".format(input_file))
             exit(1)
         # read it
         with open(input_file) as f:
             parser = BibTexParser()
             parser.customization = Reader.customizations
             db = bibtexparser.load(f, parser=parser)
-            self.visual.print("Loaded {} entries from file {}.".format(len(db.entries), self.bib_path))
+            self.visual.log("Loaded {} entries from file {}.".format(len(db.entries), self.bib_path))
         self.db = db
         self.entry_collection = self.load_collection(db)
 
         updated_tags = self.entry_collection.get_tag_information()
         if updated_tags != self.tags_info:
             self.tags_info = updated_tags
-            what = self.visual.input("Write updated tags to the original file: {}?".format(self.tags_path), "yes *no")
-            if utils.matches(what, "yes"):
+            if self.visual.yes_no("Write updated tags to the original file: {}?".format(self.tags_path), default_yes=False):
                 with open(self.tags_path, "w") as f:
                     f.write(json.dumps(updated_tags, indent=4, sort_keys=True))
 
         if self.entry_collection.entries_fixed > 0:
-            self.visual.print("Applied a total of {} fixes to {} entries.".format(self.entry_collection.fixes, self.entry_collection.entries_fixed))
-            what = self.visual.input("Write fixes to the original source file: {}?".format(self.bib_path), "yes *no")
-            if utils.matches(what, "no"):
-                pass
-            else:
+            self.visual.message("Applied a total of {} fixes to {} entries.".format(self.entry_collection.fixes, self.entry_collection.entries_fixed))
+            if self.visual.yes_no("Write fixes to the original source file: {}?".format(self.bib_path), default_yes=False):
                 self.entry_collection.overwrite_file(self.conf)
 
     def get_entry_collection(self):
