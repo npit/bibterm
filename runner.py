@@ -168,6 +168,9 @@ class Runner:
     def modified_collection(self):
         return self.entry_collection.modified_collection
 
+    def unselect(self):
+        self.cached_selection = None
+
     def select(self, inp):
         # no command offered: it's a number, select from results (0-addressable)
         nums = utils.get_index_list(inp, len(self.reference_entry_id_list))
@@ -258,7 +261,7 @@ class Runner:
         self.reference_history = [self.entry_collection.id_list]
         self.command_history = [(len(self.entry_collection.id_list), "<start>")]
         self.reference_history_index = 0
-        self.cached_selection = None
+        self.unselect()
 
     # move the reference list wrt stored history
     def step_history(self, n_steps):
@@ -292,13 +295,14 @@ class Runner:
         self.visual.log("Changed reference list to [{}], with {} items.".format(modification_msg, len(new_reflist)))
         self.push_reference_list(new_reflist, modification_msg)
         # unselect stuff -- it's meaningless now
-        self.cached_selection = None
+        self.unselect()
 
     # add to reference list history
-    def push_reference_list(self, new_list, command):
-        # register the new reference
-        if new_list == self.reference_entry_id_list:
+    def push_reference_list(self, new_list, command, force=False):
+        # no duplicates
+        if new_list == self.reference_entry_id_list and not force:
             return
+        # register the new reference
         self.reference_history.append(new_list)
         self.reference_history_index += 1
         self.reference_entry_id_list = new_list
@@ -448,8 +452,17 @@ class Runner:
                 if nums is None or not nums:
                     self.visual.error("Need a selection to delete.")
                     continue
-                for entry_id in [self.reference_entry_id_list[n - 1] for n in nums]:
+                to_delete = [self.reference_entry_id_list[n - 1] for n in nums]
+                old_len, del_len = len(self.reference_entry_id_list), len(to_delete)
+                for entry_id in to_delete:
                     self.entry_collection.remove(entry_id)
+                    self.visual.log("Deleted entry {}".format(entry_id))
+                remaining = [x for x in self.reference_entry_id_list if x not in to_delete]
+                self.visual.log("Deleted {}/{} entries, left with {}".format(del_len, old_len, len(remaining)))
+                self.push_reference_list(remaining, "deletion", force=True)
+                self.do_update_config = True
+                self.unselect()
+
             # latex citing
             elif utils.matches(command, self.commands.cite):
                 nums = self.get_index_selection(arg)
@@ -605,7 +618,7 @@ class Runner:
                 self.visual.error("Undefined command: {}".format(command))
                 self.visual.message("Available:")
                 skeys = sorted(self.commands_dict.keys())
-                self.visual.print_enum(list(zip(skeys, [self.commands_dict[k] for k in skeys])), at_most=None, header="- action key".split())
+                self.visual.print_enum(list(zip(skeys, [self.commands_dict[k] for k in skeys])), at_most=None, header="action key".split())
             previous_command = command
         # end of loop
         self.save_if_modified()

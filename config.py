@@ -62,9 +62,10 @@ def get_defaults(conf):
         "history_jump": "hj",
         "history_back": "hb",
         "history_forward": "hf",
-        "limit": "tr",
+        "truncate": "tr",
         "tag": "ta",
     }
+
     # controls that can act on selection(s)
     conf["selection_commands"] = ["list", "delete", "cite", "tag", "pdf_file", "pdf_web", "pdf_open"]
 
