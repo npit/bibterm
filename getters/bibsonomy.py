@@ -1,6 +1,6 @@
 import json
 import re
-from urllib.request import quote
+from urllib.parse import quote
 
 import bibsonomy
 import utils
@@ -13,6 +13,9 @@ class BibsonomyGetter(BaseGetter):
         super().__init__(visual)
         self.base_url = "https://www.bibsonomy.org/search/"
         self.needs_params = True
+
+    def get_params(self, params):
+        return [self.username, self.api_key]
 
     def configure(self, params):
         try:

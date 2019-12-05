@@ -173,7 +173,7 @@ class Io:
         cur_reference, cur_collection = reference, collection
         while True:
             self.print_enum(cur_collection, header=header)
-            sel = self.ask_user("Modify the list via index")
+            sel = self.ask_user("Enter numeric indexes to modify the list, or ENTER to proceed")
             sel = utils.get_index_list(sel, len(cur_collection))
             if sel:
                 sel = sorted(set(sel))
@@ -391,10 +391,10 @@ class TermTables(Io):
                 attributes.append(str(name))
                 values.append(str(value))
             table_contents.append([str(num), "\n".join(attributes).strip(), "\n".join(values).strip()])
-        self.print(self.get_table(table_contents, preserve_col_idx=[0], inner_border=True))
+        self.print(self.get_table(table_contents, preserve_col_idx=[0], inner_border=True, is_multiline=True))
 
-    def get_table(self, contents, preserve_col_idx=[], inner_border=False):
-        table = self.fit_table(AsciiTable(contents), preserve_col_idx)
+    def get_table(self, contents, preserve_col_idx=[], inner_border=False, is_multiline=True):
+        table = self.fit_table(AsciiTable(contents), preserve_col_idx, is_multiline)
         if inner_border:
             table.inner_row_border = True
         return table.table
@@ -407,7 +407,7 @@ class TermTables(Io):
         self.print(self.get_table(contents).table)
 
 
-    def fit_table(self, table, preserve_col_idx=None):
+    def fit_table(self, table, preserve_col_idx=None, is_multiline=False):
         change_col_idx = range(len(table.table_data[0]))
         if preserve_col_idx is not None:
             change_col_idx = [i for i in change_col_idx if i not in preserve_col_idx]
@@ -443,9 +443,15 @@ class TermTables(Io):
         return table
 
     def prune_string(self, content, prune_to=None, repl="..."):
-        if prune_to is not None:
-            content = content[:prune_to]
-        return content[:max(0,len(content) - len(repl))] + repl
+        # consider newlines
+        if "\n" in content:
+            content = content.split("\n")
+            pruned = [self.prune_string(ccc, prune_to, repl) for ccc in content]
+            return "\n".join(pruned)
+        if len(content) > prune_to:
+            to = max(0, prune_to - len(repl))
+            content = content[:to] + repl
+        return content
 
     def print_enum(self, x_iter, at_most=None, additionals=None, header=None, preserve_col_idx=None):
         """Print collection, with a numeric column per line"""
@@ -453,6 +459,7 @@ class TermTables(Io):
             preserve_col_idx = []
         if self.only_debug and not self.do_debug:
             return
+        x_iter = utils.listify(x_iter)
         # check which items will be printed
         if at_most is not None and len(x_iter) > at_most:
             idxs_print = list(range(at_most - 1)) + [len(x_iter) - 1]

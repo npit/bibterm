@@ -17,15 +17,27 @@ class Getter:
         self.do_udpate_config = False
         self.browser = "firefox"
 
+        self.bibtex_api, self.pdf_api = None, None
+        self.configure()
+
     def instantiate(self, name):
         return GetterFactory.get_instance(name, self.visual)
+
+    def get_selected_apis(self):
+        ret = {}
+        if self.pdf_api is not None:
+            ret["pdf_getter"] = self.pdf_api.name
+        if self.bibtex_api is not None:
+            ret["bibtex_getter"] = self.bibtex_api.name
+            if self.bibtex_api.needs_params:
+                ret["bibtex_getter_params"] = self.bibtex_api.get_params()
+        return ret
 
     def configure(self):
         try:
             self.browser = self.conf.user_settings["browser"]
         except KeyError:
             pass
-
 
         self.pdf_apis = self.conf.pdf_apis
         self.bibtex_apis = self.conf.bibtex_apis

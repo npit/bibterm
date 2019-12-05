@@ -54,14 +54,25 @@ class EntryCollection:
             entry = bib_db.entries[i]
             ent = Entry(entry)
             self.insert(ent)
-        self.check_for_missing_fields()
+        # self.check_for_missing_fields()
 
+    # check and log missing entry elements
     def check_for_missing_fields(self):
+        missing_per_entry = {}
+        missing_per_field = {"pages": [], "publisher":[]}
         for e in self.entries.values():
+            fields = []
             if not e.has_pages():
-                self.visual.error("Entry {} has no pages information".format(e.ID))
+                # self.visual.error("Entry {} has no pages information".format(e.ID))
+                fields.append("pages")
+                missing_per_field["pages"].append(e.ID)
             if not e.has_publisher():
-                self.visual.error("Entry {} has no publisher information".format(e.ID))
+                # self.visual.error("Entry {} has no publisher information".format(e.ID))
+                fields.append("publisher")
+                missing_per_field["publisher"].append(e.ID)
+            if fields:
+                missing_per_entry[e.ID] = fields
+        return missing_per_entry, missing_per_field
 
     def pdf_path_exists(self, path):
         return path in self.all_pdf_paths

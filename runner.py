@@ -136,14 +136,13 @@ class Runner:
     def get_getter(self):
         if self.getter is None:
             self.getter = Getter(self.conf)
-            upd_conf = self.getter.configure()
-            if upd_conf:
-                self.accumulate_config_updates(["pdf_search", "selected_api", self.getter.selected_api])
         return self.getter
 
-    def accumulate_config_updates(self, updc):
-        self.do_update_config = True
-        self.config_update.append(updc)
+    def accumulate_config_updates(self):
+        if self.getter is not None:
+            if self.getter.do_update_config:
+                self.do_update_config = True
+                self.config_update.append(self.getter.get_config_update())
 
     def get_config_update(self):
         return self.config_update
@@ -342,6 +341,7 @@ class Runner:
             return nums
 
     def save_if_modified(self, verify_write=True, called_explicitely=False):
+        # collection
         modified_status = "*has been modified*" if self.modified_collection() else "has not been modified"
         if verify_write:
             # for explicit calls, do not ask for verification
@@ -357,6 +357,8 @@ class Runner:
         # write
         self.entry_collection.overwrite_file(self.conf)
         self.entry_collection.reset_modified()
+        # config
+
 
     def set_local_pdf_path(self, str_selection=None):
         nums = self.get_index_selection(str_selection)
@@ -543,12 +545,12 @@ class Runner:
 
                 reader2 = Reader(self.conf)
                 read_entries_dict = reader2.read_entry_list(res)
-                self.visual.log("Retrieved entry item(s) from query [{}]".format(arg))
+                self.visual.log("Retrieved {} entry item(s) from query [{}]".format(len(read_entries_dict), arg))
 
                 # select subset
                 if len(read_entries_dict) > 1:
-                    peruse_entries = list(zip(*[(e.ID, e.get_discovery_view()) for e in read_entries_dict.values()]))
-                    _, selected_ids = self.visual.user_multifilter(peruse_entries[1], header=Entry.discovery_keys, reference=peruse_entries[0])
+                    ids, content = list(zip(*[(e.ID, e.get_discovery_view()) for e in read_entries_dict.values()]))
+                    _, selected_ids = self.visual.user_multifilter(content, header=Entry.discovery_keys, reference=ids)
                     selected_entries = [v for (k, v) in read_entries_dict.items() if k in selected_ids]
                 else:
                     selected_entries = list(read_entries_dict.values())

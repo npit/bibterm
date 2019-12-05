@@ -14,6 +14,9 @@ class BaseGetter:
     def get_bibtex(self, query):
         pass
 
+    def get_params(self):
+        return ""
+
     def configure(self, query):
         pass
 

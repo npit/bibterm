@@ -4,6 +4,14 @@ from collections import namedtuple
 import clipboard
 
 
+# convert objetct / members to list
+def listify(x):
+    if type(x) not in (list, tuple):
+        x = [x]
+    if type(x[0]) not in (list, tuple):
+        x = [[k] for k in x]
+    return x
+
 # get a single numeric from string
 def get_single_index(inp):
     res = None
