@@ -41,6 +41,7 @@ class Getter:
 
         self.pdf_apis = self.conf.pdf_apis
         self.bibtex_apis = self.conf.bibtex_apis
+        self.num_retrieved_bibtex = self.conf.num_retrieved_bibtex
 
         # instantiate user selections
         self.instantiate_selected_apis()
@@ -97,7 +98,7 @@ class Getter:
 
     def get_web_bibtex(self, query):
         self.check_bibtex_api()
-        return self.bibtex_api.get_web_bibtex(query)
+        return self.bibtex_api.get_web_bibtex(query)[:self.num_retrieved_bibtex]
 
     def get_web_pdf(self, web_path, entry_id):
         try:

@@ -1,6 +1,6 @@
 import json
 import re
-from urllib.parse import quote
+from urllib.parse import quote, quote_plus
 
 import bibsonomy
 import utils
@@ -13,6 +13,7 @@ class BibsonomyGetter(BaseGetter):
         super().__init__(visual)
         self.base_url = "https://www.bibsonomy.org/search/"
         self.needs_params = True
+        self.ignore_keys = "intrahash interhash href misc".split()
 
     def get_params(self, params):
         return [self.username, self.api_key]
@@ -27,18 +28,21 @@ class BibsonomyGetter(BaseGetter):
         # bibsonomy does not like punctuation
         return super().get_url(self.remove_punct(query))
 
+    def process_query(self, query):
+        return " ".join((self.remove_punct(query).split()))
 
     def get_bibtex(self, query):
         self.visual.log("Fetching bibsonomy content for query: [{}]".format(query))
         rs = bibsonomy.RestSource(self.username, self.api_key)
+        query = self.process_query(query)
         # def func(q, start=0, end=1000):
         #     return rs._get("/posts?resourcetype=" + quote(rs._get_resource_type("publication")) + "&search={}".format(q))
-        res = rs._get("/posts?resourcetype=" + quote(rs._get_resource_type("publication")) + "&search={}".format(query))
+        res = rs._get("/posts?resourcetype=" + quote(rs._get_resource_type("publication")) + "&search={}".format(quote_plus(query)))
         res = json.loads(res)
         if res['stat'] != 'ok':
             self.visual.error("Error fetching bibsonomy query '{}' : {}".format(query, res['stat']))
             return None
         res = res['posts']['post']
         res = [res[i]["bibtex"] for i in range(len(res))]
-        res = [{k: self.preproc_text(dct[k]) for k in dct} for dct in res]
+        res = [{k: self.preproc_text(dct[k]) for k in dct if k not in self.ignore_keys} for dct in res]
         return sorted(res, key=lambda x: x['year'] if 'year' in x else x['title'])

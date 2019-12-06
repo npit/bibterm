@@ -165,22 +165,30 @@ class Io:
             # valid or no-option input
             return ans
 
-    def user_multifilter(self, collection, header, reference=None):
+    def user_multifilter(self, collection, header, reference=None, print_func=None, preserve_col_idx=None):
         """Filtering function by user index selection. Reference can be used to keep track of input items"""
         if reference is None:
-            reference = list(range(collection))
+            reference = list(range(len(collection)))
+        if print_func is None:
+            print_func = self.print_enum
 
         cur_reference, cur_collection = reference, collection
         while True:
-            self.print_enum(cur_collection, header=header)
-            sel = self.ask_user("Enter numeric indexes to modify the list, or ENTER to proceed")
+            print_func(cur_collection, header=header, preserve_col_idx=preserve_col_idx)
+            sel = self.ask_user("Enter numeric indexes to modify the list, q to select none, or ENTER to proceed")
+            if sel == "q":
+                return [], []
             sel = utils.get_index_list(sel, len(cur_collection))
             if sel:
                 sel = sorted(set(sel))
                 cur_collection = [cur_collection[i-1] for i in sel]
                 cur_reference = [cur_reference[i-1] for i in sel]
-                self.print_enum(cur_collection, header=header)
+                # return immediately for single-selections
+                if len(cur_collection) == 1:
+                    return cur_collection, cur_reference
+                # confirm for larger ones
                 if self.ask_user("Keep these?", "*yes no(reset)") == "yes":
+                    print_func(cur_collection, header=header, preserve_col_idx=preserve_col_idx)
                     return cur_collection, cur_reference
                 else:
                     cur_collection = collection
@@ -376,9 +384,12 @@ class TermTables(Io):
         contents = [list(self.get_entry_details(cont).items()) for cont in entries]
         self.print_multiline_items(contents, header)
 
-    def print_multiline_items(self, items, header):
+    def print_multiline_items(self, items, header, preserve_col_idx=None):
         """Print single-column (plus enumeration) multiline items"""
+        # import ipdb; ipdb.set_trace()
         header = ["idx"] + header
+        if preserve_col_idx is not None:
+            preserve_col_idx = [0] + [x+1 for x in preserve_col_idx]
         table_contents = [header]
         if len(header) != len(table_contents[0]):
             self.error("Header length mismatch!")
@@ -391,7 +402,7 @@ class TermTables(Io):
                 attributes.append(str(name))
                 values.append(str(value))
             table_contents.append([str(num), "\n".join(attributes).strip(), "\n".join(values).strip()])
-        self.print(self.get_table(table_contents, preserve_col_idx=[0], inner_border=True, is_multiline=True))
+        self.print(self.get_table(table_contents, preserve_col_idx=preserve_col_idx, inner_border=True, is_multiline=True))
 
     def get_table(self, contents, preserve_col_idx=[], inner_border=False, is_multiline=True):
         table = self.fit_table(AsciiTable(contents), preserve_col_idx, is_multiline)
@@ -404,8 +415,23 @@ class TermTables(Io):
             return
         contents = self.get_entry_contents(entry)
         contents = [["attribute", "value"]] + list(contents.items())
-        self.print(self.get_table(contents).table)
+        self.print(self.get_table(contents))
 
+
+    # get table column max lengths, considering newline elements
+    def get_table_column_max_widths(self, data):
+        widths = []
+        for row in data:
+            rw = []
+            for col in row:
+                if "\n" in col:
+                    # get max of column element
+                    llen = max([len(x) for x in col.split("\n")])
+                else:
+                    llen = len(col)
+                rw.append(llen)
+            widths.append(rw)
+        return widths
 
     def fit_table(self, table, preserve_col_idx=None, is_multiline=False):
         change_col_idx = range(len(table.table_data[0]))
@@ -413,23 +439,30 @@ class TermTables(Io):
             change_col_idx = [i for i in change_col_idx if i not in preserve_col_idx]
             change_col_idx = sorted(change_col_idx, reverse=True)
 
+        iter, max_iter = 0, 5
         while not table.ok:
             data = table.table_data
             if not change_col_idx:
                 self.fatal_error("Table does not fit but no changeable columns defined.")
-            widths = [[len(x) for x in row] for row in data]
-            zwidths = list(zip(*widths))
+            # import ipdb; ipdb.set_trace()
+            widths = self.get_table_column_max_widths(data)
             # med = zwidths[len(zwidths)//2]
             # mean_lengths = [sum(x)/len(x) for x in zwidths]
             # anything larger than 2 * the median, prune it
-            termwidth = terminal_size()[0]
+            zwidths = list(zip(*widths))
             maxwidths = [max(z) for z in zwidths]
+
+            termwidth = terminal_size()[0]
             max_column_sizes = [table.column_max_width(k) for k in range(len(data[0]))]
+            # print(termwidth)
+            # print(max_column_sizes)
+            # print(maxwidths)
             # calc the required reduction; mx is negative for overflows
             # max_size_per_col = [mw - mcs if mcs < 0 else mw for (mw, mcs) in zip(maxwidths, max_column_sizes)]
             # get widths for each row
             for col in change_col_idx:
                 max_sz = max_column_sizes[col]
+                print(max_sz)
                 if max_sz < 0:
                     # column's ok
                     continue
@@ -440,11 +473,15 @@ class TermTables(Io):
                         data[row][col] = self.prune_string(data[row][col], max_sz)
                         widths[row][col] = len(data[row][col])
             table = AsciiTable(data)
+            iter += 1
+            if iter > max_iter:
+                break
         return table
 
     def prune_string(self, content, prune_to=None, repl="..."):
         # consider newlines
         if "\n" in content:
+            # import ipdb; ipdb.set_trace()
             content = content.split("\n")
             pruned = [self.prune_string(ccc, prune_to, repl) for ccc in content]
             return "\n".join(pruned)

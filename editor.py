@@ -1,4 +1,6 @@
 import os
+import re
+import string
 
 import utils
 from getters.getter import Getter
@@ -39,7 +41,7 @@ class Editor:
         if unmatched:
             self.visual.message("Pdfs not matched to any entry:")
             self.visual.print_enum(unmatched, at_most=30, header=["pdf path"])
-            sel = self.visual.ask_user("What to do about them?", "delete move write-list *nothing")
+            sel = self.visual.ask_user("What to do about them?", "delete move write-list search-collection *nothing")
             if utils.matches(sel, "delete"):
                 for fpath in unmatched:
                     os.remove(fpath)
@@ -64,19 +66,75 @@ class Editor:
                     with open(write_file, "w") as f:
                         f.write("\n".join(unmatched))
                     self.visual.message("Wrote.")
+            elif utils.matches(sel, "search-collection"):
+                all_titles = entry_collection.title_list
+                all_authors = list(set([auth for ent in entry_collection.entries.values() for auth in ent.author]))
+                for i, upath in enumerate(unmatched):
+                    filename = upath.split(os.sep)[-1][:-4]
+                    self.visual.message("Looking for candidate entries for dangling pdf {}/{}: {}".format(i+1, len(unmatched), filename))
+                    filename = re.sub("[{}]".format(string.punctuation), " ", filename)
+                    # titles
+                    res = self.visual.search(filename, all_titles, 5)
+                    ids = [entry_collection.title2id[r[0][0]] for r in res]
+                    titles = [r[0][0] for r in res]
+                    results = list(zip(ids, titles))
+
+                    # authors
+                    res = self.visual.search(filename, all_authors, 5)
+                    ids = list(set([ID for r in res for ID in entry_collection.author2id[r[0][0]]]))
+                    titles = [entry_collection.entries[ID].title for ID in ids]
+                    results += list(zip(ids, titles))
+
+                    while True:
+                        result, _ = self.visual.user_multifilter(results, header='id title'.split(), preserve_col_idx=[0])
+                        if len(result) > 1:
+                            self.visual.error("Select at most one element, dude.")
+                            continue
+                        break
+                    if not result:
+                        import ipdb; ipdb.set_trace()
+                        if self.visual.yes_no("Continue to next pdf?"):
+                            continue
+                        break
+                    entry = entry_collection.entries[result[0][0]]
+                    self.visual.print_entry_contents(entry)
+                    if self.visual.ask_user("Insert {} to the entry?".format(upath)):
+                        entry.set_file(upath)
 
 
     def check_missing_fields(self, entry_collection):
+        self.visual.message("Checking for missing entry fields.")
         missing_per_entry, missing_per_field = entry_collection.check_for_missing_fields()
         if missing_per_entry:
             self.visual.message("Missing {} distinct fields from {} entries".format(len(missing_per_field), len(missing_per_entry)))
             if self.visual.yes_no("Search bibtexs to complete the entries?"):
                 gt = Getter(self.conf)
-                for entryid in missing_per_entry:
+                for entryid, fields in missing_per_entry.items():
                     # search by title
                     title = entry_collection.entries[entryid].title
-                    res = gt.get_web_bibtex(title)
+                    results = gt.get_web_bibtex(title)
+                    for field in fields:
+                        useful_results = []
+                        for res in results:
+                            if field in res:
+                                useful_results.append(res)
+                        # show results for the entry that contain the missing field
+                        self.visual.print("Entry [{}]: [{}], missing field: {}, {} candidates with such information.".format(entryid, title, field, len(useful_results)))
+                        if not useful_results:
+                            continue
+                        while True:
+                            listcols = [list(u.items()) for u in useful_results]
+                            _, selected_ids = self.visual.user_multifilter(listcols, header='keys attributes'.split(), print_func=self.visual.print_multiline_items)
+                            if len(selected_ids) > 1:
+                                self.visual.error("Selected: {}, need to select at most one candidate.".format(selected_ids))
+                                continue
+                            break
+                        if not selected_ids:
+                            continue
 
+                        result = [useful_results[i] for i in selected_ids][0]
+                        self.visual.print("Setting entry field [{}] to [{}]".format(field, result[field]))
+                        entry_collection.entries[entryid].set_dict_value(field, result[field])
 
 
     def check_consistency(self, entry_collection):

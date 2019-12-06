@@ -74,6 +74,7 @@ def get_defaults(conf):
         "scihub": "https://sci-hub.tw", "scholarly":"",
         "bibsonomy": ["https://www.bibsonomy.org/search/", "username", "api_key"]}
     conf["actions"] = ["merge", "inspect"]
+    conf["num_retrieved_bibtex"] = 5
 
     conf["visual"] = "ttables"
     conf["pdf_dir"] = join(dirname(conf["bib_path"]), "pdfs")

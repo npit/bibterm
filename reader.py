@@ -30,6 +30,7 @@ class EntryCollection:
     def __init__(self, bib_db, tags_info):
         self.bibtex_db = bib_db
         self.title2id = {}
+        self.author2id = {}
         self.entries = {}
         self.maxlen_id = 0
         self.maxlen_title = 0
@@ -356,6 +357,11 @@ class EntryCollection:
         self.entries[ID] = ent
         # update title-id mapping
         self.title2id[title] = ID
+        for auth in ent.author:
+            if auth not in self.author2id:
+                self.author2id[auth] = []
+            self.author2id[auth].append(ID)
+
         # update ids and titles lists
         self.id_list.append(ID)
         self.title_list.append(title)
@@ -443,6 +449,16 @@ class Entry:
                 e.ID = ddict[k]
                 break
         return e
+
+    def set_dict_value(self, key, value):
+        if key == "pages":
+            self.pages = value
+        elif key == "publisher":
+            self.publisher = value
+        else:
+            pass
+        self.modified_collection = True
+        self.raw_dict[key] = value
 
 
     def __init__(self, kv):
