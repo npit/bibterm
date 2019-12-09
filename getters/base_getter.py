@@ -26,9 +26,11 @@ class BaseGetter:
             res = self.get_bibtex(query)
         except Exception as ex:
             self.visual.error("Failed to complete the bibtex-fetching query. Reason: {}".format(ex))
-            return None
+            return []
         if not res:
             self.visual.error("No data retrieved.")
+        if res is None:
+            res = []
         return res
 
     def preproc_text(self, text, do_newline=True):

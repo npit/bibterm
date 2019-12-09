@@ -373,6 +373,7 @@ class Runner:
         if self.editor.collection_modified and updated_entry is not None:
             self.entry_collection.replace(updated_entry)
             self.visual.log("Entry {} updated with pdf path.".format(entry.ID))
+        self.do_update_config = self.editor.collection_modified or self.do_update_config
 
     def get_pdf_from_web(self, str_selection=None):
         nums = self.get_index_selection(str_selection)
@@ -554,8 +555,8 @@ class Runner:
                     selected_entries = [v for (k, v) in read_entries_dict.items() if k in selected_ids]
                 else:
                     selected_entries = list(read_entries_dict.values())
-
-
+                if not selected_entries:
+                    continue
                 self.visual.print_entries_contents(selected_entries)
                 if not self.visual.yes_no("Store?"):
                     continue

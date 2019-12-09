@@ -89,6 +89,20 @@ class Io:
     def receive_search(self):
         return True, self.ask_user("Search:")
 
+    # shortcut for looped information printing
+    def print_loop(self, iterable_items, msg="", lambda_item=None, print_func=None, condition=None):
+        if print_func is None:
+            print_func = self.print
+        idx = 0
+        for item in iterable_items:
+            if condition is not None:
+                if not condition(item):
+                    continue
+            item_str = lambda_item(item) if lambda_item is not None else item
+            print_func("{}/{} : {} {}".format(idx+1, len(iterable_items), item_str, msg))
+            yield item
+            idx += 1
+
     def yes_no(self, msg, default_yes=True):
         opts = "*yes no" if default_yes else "yes *no"
         what = self.ask_user(msg, opts)
@@ -386,7 +400,6 @@ class TermTables(Io):
 
     def print_multiline_items(self, items, header, preserve_col_idx=None):
         """Print single-column (plus enumeration) multiline items"""
-        # import ipdb; ipdb.set_trace()
         header = ["idx"] + header
         if preserve_col_idx is not None:
             preserve_col_idx = [0] + [x+1 for x in preserve_col_idx]
@@ -444,7 +457,6 @@ class TermTables(Io):
             data = table.table_data
             if not change_col_idx:
                 self.fatal_error("Table does not fit but no changeable columns defined.")
-            # import ipdb; ipdb.set_trace()
             widths = self.get_table_column_max_widths(data)
             # med = zwidths[len(zwidths)//2]
             # mean_lengths = [sum(x)/len(x) for x in zwidths]
@@ -462,7 +474,6 @@ class TermTables(Io):
             # get widths for each row
             for col in change_col_idx:
                 max_sz = max_column_sizes[col]
-                print(max_sz)
                 if max_sz < 0:
                     # column's ok
                     continue
@@ -481,7 +492,6 @@ class TermTables(Io):
     def prune_string(self, content, prune_to=None, repl="..."):
         # consider newlines
         if "\n" in content:
-            # import ipdb; ipdb.set_trace()
             content = content.split("\n")
             pruned = [self.prune_string(ccc, prune_to, repl) for ccc in content]
             return "\n".join(pruned)

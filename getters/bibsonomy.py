@@ -13,7 +13,8 @@ class BibsonomyGetter(BaseGetter):
         super().__init__(visual)
         self.base_url = "https://www.bibsonomy.org/search/"
         self.needs_params = True
-        self.ignore_keys = "intrahash interhash href misc".split()
+        self.ignore_keys = "intrahash interhash href misc bibtexAbstract".split()
+        self.dont_preproc_keys = "author".split()
 
     def get_params(self, params):
         return [self.username, self.api_key]
@@ -31,6 +32,18 @@ class BibsonomyGetter(BaseGetter):
     def process_query(self, query):
         return " ".join((self.remove_punct(query).split()))
 
+    def map_keys(self, ddict):
+        rdict = {k: v for (k, v) in ddict.items()}
+        for k in ddict:
+            if k == 'bibtexKey':
+                rdict['ID'] = rdict[k]
+                del rdict[k]
+            if k == self.ignore_keys:
+                del rdict[k]
+            if k == "author":
+                rdict[k] = [x.strip() for x in rdict[k].split("and")]
+        return rdict
+
     def get_bibtex(self, query):
         self.visual.log("Fetching bibsonomy content for query: [{}]".format(query))
         rs = bibsonomy.RestSource(self.username, self.api_key)
@@ -43,6 +56,6 @@ class BibsonomyGetter(BaseGetter):
             self.visual.error("Error fetching bibsonomy query '{}' : {}".format(query, res['stat']))
             return None
         res = res['posts']['post']
-        res = [res[i]["bibtex"] for i in range(len(res))]
-        res = [{k: self.preproc_text(dct[k]) for k in dct if k not in self.ignore_keys} for dct in res]
+        res = [self.map_keys(res[i]["bibtex"]) for i in range(len(res))]
+        res = [{k: self.preproc_text(dct[k]) if k not in self.dont_preproc_keys else dct[k] for k in dct} for dct in res]
         return sorted(res, key=lambda x: x['year'] if 'year' in x else x['title'])

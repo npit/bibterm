@@ -444,10 +444,6 @@ class Entry:
     @staticmethod
     def from_dict(ddict):
         e = Entry(ddict)
-        for k in 'bibtexKey'.split():
-            if k in ddict:
-                e.ID = ddict[k]
-                break
         return e
 
     def set_dict_value(self, key, value):
@@ -457,7 +453,6 @@ class Entry:
             self.publisher = value
         else:
             pass
-        self.modified_collection = True
         self.raw_dict[key] = value
 
 
@@ -468,6 +463,7 @@ class Entry:
 
     def get_raw_dict(self):
         return self.raw_dict
+
     def has_file(self):
         return self.file is not None
 
@@ -493,7 +489,6 @@ class Entry:
     def set_keywords(self, kw):
         self.raw_dict["keywords"] = kw
         self.keywords = kw
-        self.modified_collection = True
 
     def get_discovery_view(self):
         """Return only information to identify the paper"""
@@ -515,6 +510,12 @@ class Entry:
                         continue
                 d[key] = value
         return d
+
+    def has_canonic_filename(self, entry):
+        return entry.file.spit(os.sep) == self.get_canonic_filename()
+
+    def get_canonic_filename(self):
+        return  self.ID + ".pdf"
 
     def __str__(self):
         keys = Entry.shorthand_keys
