@@ -7,7 +7,7 @@ from editor import Editor
 from getters.getter import Getter
 from reader import Entry, Reader
 from search.searcher import Searcher
-from visual import setup
+from visual.instantiator import setup
 
 # do not use curses, try
 #     http: // urwid.org / tutorial /
@@ -146,12 +146,6 @@ class Runner:
             self.searcher = Searcher()
         return self.searcher
 
-    def accumulate_config_updates(self):
-        if self.getter is not None:
-            if self.getter.do_update_config:
-                self.do_update_config = True
-                self.config_update.append(self.getter.get_config_update())
-
     def get_config_update(self):
         return self.config_update
 
@@ -188,11 +182,8 @@ class Runner:
         self.inspect_entries(nums)
         self.cached_selection = nums
 
-    def get_stored_input(self):
-        self.has_stored_input = False
-        return self.stored_input
-
     def list(self, arg=None):
+
         show_list = self.reference_entry_id_list
         nums = self.get_index_selection(arg)
         if nums:
@@ -202,6 +193,7 @@ class Runner:
                 self.change_history(show_list, "{} {}".format(self.commands.list, len(show_list)))
         else:
             show_list = self.reference_entry_id_list
+        self.visual.log("Listing {} entries.".format(len(show_list)))
         self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.max_list)
 
     def is_multivalue_key(self, filter_key):
@@ -319,15 +311,13 @@ class Runner:
         self.command_history.append((len(self.reference_entry_id_list), command))
 
     def get_input(self, input_cmd):
-        self.visual.idle()
         if input_cmd is not None:
             user_input = input_cmd
             self.visual.debug("Got input from main: [{}]".format(input_cmd))
             input_cmd = None
-        elif not self.has_stored_input:
-            user_input = self.visual.receive_command()
         else:
-            user_input = self.get_stored_input()
+            self.visual.idle()
+            user_input = self.visual.receive_command()
         return user_input, input_cmd
 
     def get_index_selection(self, inp):
@@ -485,6 +475,17 @@ class Runner:
                 # clipboard.copy(citation_id)
                 clipboard.copy(citation)
                 self.visual.message("Copied to clipboard: {}".format(citation))
+
+            # latex citing
+            elif utils.matches(command, self.commands.cite_multi):
+                nums = self.get_index_selection(arg)
+                if nums is None or not nums:
+                    self.visual.error("Need a selection to multi-cite.")
+                    continue
+                citation_id = ", ".join([self.reference_entry_id_list[n - 1] for n in nums])
+                # clipboard.copy(citation_id)
+                clipboard.copy(citation_id)
+                self.visual.message("Copied to clipboard: {}".format(citation_id))
             # -------------------------------------------------------
             # adding local paths to pdfs
             elif command.startswith(self.commands.pdf_file):
@@ -510,7 +511,7 @@ class Runner:
             elif utils.matches(command, self.commands.tag):
                 nums = self.get_index_selection(arg)
                 if nums is None or not nums:
-                    self.visual.error("Need a selection to cite.")
+                    self.visual.error("Need a selection to tag.")
                     continue
                 for num in nums:
                     entry = self.entry_collection.entries[self.reference_entry_id_list[num - 1]]

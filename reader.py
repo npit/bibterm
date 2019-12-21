@@ -11,7 +11,7 @@ from bibtexparser.bparser import BibTexParser
 
 import utils
 from stopwords import stopwords
-from visual import setup
+from visual.instantiator import setup
 from writer import Writer
 
 

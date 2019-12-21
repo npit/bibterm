@@ -7,6 +7,7 @@ from getters.base_getter import BaseGetter
 
 class Crossref(BaseGetter):
     name = "crossref"
+    num_keep = 5
     def __init__(self, visual):
         super().__init__(visual)
         self.base_url = "https://api.crossref.org/works"
@@ -19,7 +20,12 @@ class Crossref(BaseGetter):
         if resp.status_code != 200:
             self.visual.error(msg)
             return None
-        data = msg["items"][0]
+        data = msg["items"][:self.num_keep]
+        if not data:
+            return None
+        for d in data:
+            print(d["title"], d["DOI"])
+        data = data[0]
         try:
             return data["DOI"]
         except KeyError:

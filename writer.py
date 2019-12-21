@@ -1,7 +1,7 @@
 import bibtexparser
 
 import utils
-from visual import setup
+from visual.instantiator import setup
 
 
 class Writer:

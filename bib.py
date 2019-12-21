@@ -70,7 +70,7 @@ def main():
         conf_dict["visual"] = parser_args.ui
 
     conf = to_namedtuple(conf_dict, "conf")
-    vis = visual.setup(conf)
+    vis = visual.instantiator.setup(conf)
     runner, input_cmd = None, None
 
     if parser_args.actions:

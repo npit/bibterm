@@ -5,7 +5,7 @@ from os.path import basename, dirname, exists, isabs, isdir, join, splitext
 
 import utils
 from getters.getter import Getter
-from visual import setup
+from visual.instantiator import setup
 
 
 class Editor:

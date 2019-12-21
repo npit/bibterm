@@ -44,7 +44,7 @@ def get_defaults(conf):
         "get": "g",
         "up": "k",
         "list": "l",
-        "check": "check",
+        "check": "ch",
         "clear": "",
         "unselect": "us",
         "delete": "del",
@@ -53,11 +53,12 @@ def get_defaults(conf):
         "quit": "q",
         "save": "sa",
         "cite": "c",
+        "cite-multi": "cm",
         "pdf_file": "fp",
         "pdf_search": "fs",
         "pdf_web": "fw",
         "pdf_open": "o",
-        "history_show": "h",
+        "history_show": "hs",
         "history_reset": "hr",
         "history_jump": "hj",
         "history_back": "hb",
@@ -67,7 +68,7 @@ def get_defaults(conf):
     }
 
     # controls that can act on selection(s)
-    conf["selection_commands"] = ["list", "delete", "cite", "tag", "pdf_file", "pdf_web", "pdf_open"]
+    conf["selection_commands"] = ["list", "delete", "cite", "cite-multi", "tag", "pdf_file", "pdf_web", "pdf_open"]
 
     conf["pdf_apis"] = ["gscholar", "scihub", "bibsonomy"]
     conf["bibtex_apis"] = ["gscholar", "scholarly", "bibsonomy"]

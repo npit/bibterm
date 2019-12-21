@@ -4,14 +4,14 @@ from os import makedirs
 from os.path import exists, join
 
 import utils
-import visual
 from getters.getterFactory import GetterFactory
+from visual import instantiator
 
 
 class Getter:
     def __init__(self, conf):
         self.conf = conf
-        self.visual = visual.setup(conf)
+        self.visual = instantiator.setup(conf)
         self.do_udpate_config = False
         self.browser = "firefox"
 
