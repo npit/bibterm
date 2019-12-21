@@ -26,6 +26,6 @@ class ScholarlyGetter(BaseGetter):
         for i, x in enumerate(gtor):
             if i > 10:
                 break;
-            ddict = x.bib
+            ddict = self.map_keys(x.bib)
             res.append(ddict)
         return res

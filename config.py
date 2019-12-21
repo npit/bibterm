@@ -69,16 +69,28 @@ def get_defaults(conf):
     # controls that can act on selection(s)
     conf["selection_commands"] = ["list", "delete", "cite", "tag", "pdf_file", "pdf_web", "pdf_open"]
 
-    conf["pdf_search"] = {
-        "gscholar": "https://scholar.google.com/scholar?hl=en&q=",
-        "scihub": "https://sci-hub.tw", "scholarly":"",
-        "bibsonomy": ["https://www.bibsonomy.org/search/", "username", "api_key"]}
+    conf["pdf_apis"] = ["gscholar", "scihub", "bibsonomy"]
+    conf["bibtex_apis"] = ["gscholar", "scholarly", "bibsonomy"]
+    conf["doi_apis"] = ["crossref"]
+
     conf["actions"] = ["merge", "inspect"]
     conf["num_retrieved_bibtex"] = 5
 
     conf["visual"] = "ttables"
     conf["pdf_dir"] = join(dirname(conf["bib_path"]), "pdfs")
+
+    # fill in key-value pairs like the example config belowbelow
+    """
+    "user_settings":{
+        "bibtex_getter": "bibsonomy",
+        "bibtex_getter_params": ["username", "api_key"],
+        "pdf_getter": "scihub",
+        "bib_path": "/home/myusername/papers/library.bib",
+        "browser": "firefox"
+    }
+    """
     conf["user_settings"] = {}
+
     return conf
 
 

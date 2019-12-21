@@ -1,6 +1,6 @@
 import re
 import string
-from os import listdir, remove
+from os import listdir, remove, rename, system
 from os.path import basename, dirname, exists, isabs, isdir, join, splitext
 
 import utils
@@ -247,7 +247,7 @@ class Editor:
             if self.make_canonic_pdf_name(file_path, entry):
                 file_path = self.get_entry_canonic_pdf_path(entry)
             self.visual.print("Opening: {}".format(file_path))
-            os.system("/usr/bin/xdg-open '{}'".format(file_path))
+            system("/usr/bin/xdg-open '{}'".format(file_path))
         else:
             self.visual.error("Entry file path does not exist: {}".format(file_path))
         return True
@@ -277,7 +277,7 @@ class Editor:
             if do_ask:
                 if not self.visual.yes_no("File path [{}] differs from the proper one: [{}] -- rename & move?".format(file_path, proper_path)):
                     return False
-            os.rename(file_path, proper_path)
+            rename(file_path, proper_path)
             self.visual.log("Renamed {} to {} -- rename?".format(file_path, proper_path))
             self.set_file(entry, proper_path)
             return True

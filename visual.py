@@ -3,7 +3,6 @@ from itertools import combinations
 
 import terminaltables
 from blessed import Terminal
-from fuzzywuzzy import fuzz
 from terminaltables import AsciiTable
 from terminaltables.terminal_io import terminal_size
 
@@ -30,7 +29,6 @@ class Io:
     only_debug = False
     do_debug = False
     default_option_mark = "*"
-    score_match_threshold = 50
     instance = None
     clear_size = 100
     prompt = ">"
@@ -209,31 +207,6 @@ class Io:
                     cur_reference = reference
             else:
                 return collection, reference
-
-    def search(self, query, candidates, at_most, iterable_items=False):
-        if iterable_items:
-            # flatten
-            nums = list(map(len, candidates))
-            flattened_candidates = [c for clist in candidates for c in clist]
-            # score
-            raw_results = [(c, fuzz.partial_ratio(query, c)) for c in flattened_candidates]
-            # argmax
-            results, curr_idx = [], 0
-            for n in nums:
-                if n > 1:
-                    max_val = max(raw_results[curr_idx: curr_idx + n], key=lambda x: x[1])
-                else:
-                    max_val = raw_results[curr_idx]
-                results.append(max_val)
-                # print("Got from: {} : {}".format(raw_results[curr_idx: curr_idx + n], max_val))
-                curr_idx += n
-        else:
-            results = [(c, fuzz.partial_ratio(query, c)) for c in candidates]
-        # assign index
-        results = [(results[i], i) for i in range(len(results)) if results[i][1] >= self.score_match_threshold]
-        results = sorted(results, key=lambda x: x[0][1], reverse=True)
-        return results[:at_most]
-        # return process.extract(query, candidates, limit=at_most)
 
     def newline(self):
         self.print()

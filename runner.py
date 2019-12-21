@@ -6,6 +6,7 @@ import utils
 from editor import Editor
 from getters.getter import Getter
 from reader import Entry, Reader
+from search.searcher import Searcher
 from visual import setup
 
 # do not use curses, try
@@ -26,6 +27,7 @@ class Runner:
         # assignments
         self.conf = conf
         self.editor = None
+        self.searcher = None
         self.getter = None
         self.cached_selection = None
         self.has_stored_input = False
@@ -138,6 +140,12 @@ class Runner:
             self.getter = Getter(self.conf)
         return self.getter
 
+    # singleton searcher fetcher
+    def get_searcher(self):
+        if self.searcher is None:
+            self.searcher = Searcher()
+        return self.searcher
+
     def accumulate_config_updates(self):
         if self.getter is not None:
             if self.getter.do_update_config:
@@ -222,7 +230,7 @@ class Runner:
             candidate_values.append(value)
 
         # search and return ids of results
-        res = self.visual.search(filter_value, candidate_values, max_search, self.is_multivalue_key(filter_key))
+        res = self.get_searcher().fuzzy_search(filter_value, candidate_values, max_search, self.is_multivalue_key(filter_key))
         if filter_key == "ID":
             # return the IDs
             return [r[0] for r in res]
@@ -387,7 +395,7 @@ class Runner:
                 return
         getter = Getter(self.conf)
         pdf_url = self.visual.ask_user("Give pdf url to download", multichar=True)
-        file_path = getter.get_web_pdf(pdf_url, entry_id)
+        file_path = getter.download_web_pdf(pdf_url, entry_id)
         if file_path is None:
             self.visual.error("Failed to download from {}.".format(pdf_url))
             return
@@ -404,7 +412,7 @@ class Runner:
         if entry.file is not None:
             if not self.visual.yes_no("Pdf attribute exists: {}, replace?".format(entry.file), default_yes=False):
                 return
-        pdf_path = self.get_getter().search_web_pdf(entry_id, entry.title)
+        pdf_path = self.get_getter().search_web_pdf(entry_id, self.get_searcher().preprocess_query(entry.title), entry.year)
         if not pdf_path:
             self.visual.log("Invalid pdf path, aborting.")
             return
