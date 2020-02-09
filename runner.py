@@ -1,18 +1,18 @@
 from collections import namedtuple
+from thread.threaded import TimedThreadRunner
 
 import clipboard
 
 import utils
+from command_parser import CommandParser
+from config import Config
+from decorators import *
 from editor import Editor
 from getters.getter import Getter
 from reader import Entry, Reader
 from search.searcher import Searcher
+from selection import Selector
 from visual.instantiator import setup
-
-# do not use curses, try
-#     http: // urwid.org / tutorial /
-#     or
-#     https: // pypi.org / project / blessings /
 
 
 class Runner:
@@ -20,15 +20,16 @@ class Runner:
     max_search = None
     max_list = None
     search_invoke_counter = None
-    do_update_config = False
-    config_update = []
+    is_running = True
 
     def __init__(self, conf, entry_collection=None):
+
+        # configuration
+        self.config = conf
+
         # assignments
-        self.conf = conf
-        self.editor = None
         self.searcher = None
-        self.getter = None
+        self.editor = None
         self.cached_selection = None
         self.has_stored_input = False
 
@@ -40,21 +41,21 @@ class Runner:
         else:
             self.entry_collection = entry_collection
 
-        # map commands
-        ctrl_keys = conf.controls.keys()
-        self.commands_dict = conf.controls
-        self.commands = namedtuple("controls", ctrl_keys)(*[conf.controls[k] for k in ctrl_keys])
-
         # search settings
         self.searchable_fields = ["ID", "title"]
         self.multivalue_keys = ["author", "keywords"]
         self.searchable_fields += self.multivalue_keys
 
-        # history
-        self.reset_history()
-
         # ui
         self.visual = setup(conf)
+
+        # command and selection managers
+        self.command_parser = CommandParser(self.config, self.visual)
+        self.selector = Selector(self.visual)
+        self.map_ids_to_functions()
+
+        # history
+        self.reset_history()
 
         # maxes list
         # delegate handling of maximum results number to the visual component or not
@@ -66,7 +67,197 @@ class Runner:
             self.max_search = None
         self.search_invoke_counter = 0
 
+
+    def test(self, kwargs):
+        self.visual.log(f"Printing the func! {kwargs}")
+
+    def map_ids_to_functions(self):
+        self.function_id_map = {}
+
+        ctrls = {k: k for k in self.config.get_controls()}
+        commands = utils.to_namedtuple(ctrls)
+        self.function_id_map[commands.history_back] = self.step_history
+        self.function_id_map[commands.history_forward] = self.step_history
+        self.function_id_map[commands.history_jump] = self.jump_history
+        self.function_id_map[commands.history_reset] = self.reset_history
+        self.function_id_map[commands.history_show] = self.show_history
+        self.function_id_map[commands.log_history] = self.show_log_history
+        self.function_id_map[commands.delete] = self.delete_entry
+        self.function_id_map[commands.cite] = self.cite
+        self.function_id_map[commands.cite_multi] = self.multi_cite
+        self.function_id_map[commands.pdf_file] = self.set_local_pdf_path
+        self.function_id_map[commands.pdf_web] = self.get_pdf_from_web
+        self.function_id_map[commands.pdf_open] = self.pdf_open
+        self.function_id_map[commands.pdf_search] = self.search_web_pdf
+        self.function_id_map[commands.search] = self.search
+        self.function_id_map[commands.list] = self.list
+        self.function_id_map[commands.tag] = self.tag
+        self.function_id_map[commands.get] = self.get_bibtex
+        self.function_id_map[commands.save] = self.save_if_modified
+        self.function_id_map[commands.clear] = self.clear
+        self.function_id_map[commands.unselect] = self.selector.clear_cached
+        self.function_id_map[commands.show] = self.show_entries
+        self.function_id_map[commands.up] = self.visual.up
+        self.function_id_map[commands.down] = self.visual.down
+        self.function_id_map[commands.truncate] = self.truncate
+        self.function_id_map[commands.check] = self.check
+        self.function_id_map[commands.settings] = self.get_editor().edit_settings
+        self.function_id_map[commands.merge] = self.merge
+        self.function_id_map[commands.quit] = self.quit
+        self.function_id_map[commands.debug] = self.debug
+        # selection
+        self.function_id_map[self.command_parser.placeholder_index_list_id] = self.show_entries
+
+    @ignore_arg
+    def clear(self):
+        """Clearing function"""
+        self.visual.clear()
+
+    @ignore_arg
+    def merge(self):
+        """Add ocntents from the clipboard"""
+        rdr = Reader(self.config)
+        rdr.read_string(utils.paste(single_line=False))
+        if len(rdr.get_entry_collection().entries) == 0:
+            self.visual.error("Zero items extracted from the collection to merge.")
+            return
+        eids = []
+        for entry in rdr.get_entry_collection().entries.values():
+            self.entry_collection.add_new_entry(entry)
+            eids.append(entry.ID)
+        # select them
+        self.selector.select_by_id(eids)
+
+    def quit(self):
+        """Quitting flag-setting function"""
+        self.visual.debug("Quitting!")
+        self.is_running = False
+
+    def search_for_entry(self, query):
+        """Launch a search to the entry collection
+        """
+        if not query:
+            return []
+        results_ids, match_scores = [], []
+        # perform the search on all searchable fields
+        for field in self.searchable_fields:
+            self.visual.debug(f"Searching field {field} for {query}")
+            res = self.filter(field, query)
+            ids, scores = [r[0] for r in res], [r[1] for r in res]
+            for i in range(len(ids)):
+                if ids[i] in results_ids:
+                    existing_idx = results_ids.index(ids[i])
+                    # replace score, if it's higher
+                    if scores[i] > match_scores[existing_idx]:
+                        match_scores[existing_idx] = scores[i]
+                else:
+                    # if not there, just append
+                    results_ids.append(ids[i])
+                    match_scores.append(scores[i])
+
+        results_ids = sorted(zip(results_ids, match_scores), key=lambda x: x[1], reverse=True)
+        # apply max search results filtering
+        results_ids = results_ids[:self.max_search]
+        results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
+
+        self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
+        return results_ids
+
+    def get_bibtex(self, arg=None):
+        """Function to fetch a bibtex"""
+        getter = self.get_getter()
+        if getter is None:
+            return
+        if not arg:
+            arg = self.visual.ask_user("Search what on the web?", multichar=True)
+            if not arg:
+                self.visual.error("Nothing entered, aborting.")
+                return
+        try:
+            res = getter.get_web_bibtex(arg)
+        except Exception as ex:
+            self.visual.error("Failed to complete the query: {}.".format(ex))
+            return
+        if not res:
+            self.visual.error("No data retrieved.")
+            return
+
+        reader2 = Reader(self.config)
+        read_entries_dict = reader2.read_entry_list(res)
+        self.visual.log("Retrieved {} entry item(s) from query [{}]".format(len(read_entries_dict), arg))
+
+        # select subset
+        if len(read_entries_dict) > 1:
+            ids, content = list(zip(*[(e.ID, e.get_discovery_view()) for e in read_entries_dict.values()]))
+            _, selected_ids = self.visual.user_multifilter(content, header=Entry.discovery_keys, reference=ids)
+            selected_entries = [v for (k, v) in read_entries_dict.items() if k in selected_ids]
+        else:
+            selected_entries = list(read_entries_dict.values())
+        if not selected_entries:
+            return
+        self.visual.print_entries_contents(selected_entries)
+
+        if self.visual.yes_no("Store?"):
+            selected_ids = []
+            for entry in selected_entries:
+                created_entry = self.entry_collection.add_new_entry(entry)
+                if created_entry is None:
+                    self.visual.error(f"Entry {entry.ID} already exists in the collection!")
+                else:
+                    selected_ids.append(created_entry.ID)
+        else:
+            selected_ids = [x for x in selected_entries]
+        if not selected_ids:
+            return
+        if self.visual.yes_no("Select it?"):
+            self.selector.select_by_id(selected_ids)
+
+        # pdf
+        what = self.visual.ask_user("Pdf?", "local url web-search *skip")
+        if utils.matches(what, "skip"):
+            return
+        if utils.matches(what, "url"):
+            self.get_pdf_from_web()
+            return
+        if utils.matches(what, "local"):
+            self.set_local_pdf_path()
+            return
+        if utils.matches(what, "web-search"):
+            self.search_web_pdf()
+
+    def pdf_open(self, arg=None):
+        """Open the pdf of an entry"""
+        nums = self.selector.select_by_index(arg)
+        if not nums or nums is None:
+            self.visual.print("Need a selection to open.")
+        # arg has to be a single string
+        if utils.has_none(nums):
+            self.visual.print("Need a valid entry index.")
+        for num in nums:
+            entry_id = self.reference_entry_id_list[num]
+            entry = self.entry_collection.entries[entry_id]
+            pdf_in_entry = self.get_editor().open_pdf(entry)
+            if not pdf_in_entry and len(nums) == 1:
+                if self.visual.yes_no("Search for pdf on the web?"):
+                    self.search_web_pdf()
+
+    def tag(self, arg):
+        """Add tag to an entry"""
+        nums = self.selector.select_by_index(arg)
+        if nums is None or not nums:
+            self.visual.error("Need a selection to tag.")
+            return
+        for num in nums:
+            entry = self.entry_collection.entries[self.reference_entry_id_list[num]]
+            updated_entry = self.get_editor().tag(entry)
+            if self.editor.collection_modified and updated_entry is not None:
+                self.entry_collection.replace(updated_entry)
+        self.editor.clear_cache()
+
     def search(self, query=None):
+        """Entrypoint function for entries search
+        """
+
         self.visual.log("Starting search")
         if self.search_invoke_counter > 0:
             # step to the starting history to search everything
@@ -74,70 +265,65 @@ class Runner:
         search_done = False
         just_began_search = True
         query_supplied = bool(query)
+
+        ttr = TimedThreadRunner(self.search_for_entry, "")
+        # ttr.set_delay(1, self.visual.log, "delaying search execution...")
+
         while True:
             # get new search object, if it's a continued search OR no pre-given query
             if not just_began_search or (just_began_search and not query_supplied):
                 search_done, new_query = self.visual.receive_search()
+                self.visual.log("Got: [{}] [{}]".format(search_done, new_query))
                 if search_done is None:
+                    # pressed ESC
                     self.visual.message("Aborting search")
                     return
                 if new_query == "" and search_done:
                     # pressed enter
+                    self.visual.message("Concluded search")
                     break
+                # got an actual query item
+                # if query content is updated, reset the timer
                 query = new_query
+
             query = query.lower().strip()
-            self.visual.log("Got query: {}".format(query))
-            results_ids, match_scores = [], []
-            # search all searchable fields
-            for field in self.searchable_fields:
-                res = self.filter(field, query)
-                ids, scores = [r[0] for r in res], [r[1] for r in res]
-                with utils.OnlyDebug(self.visual):
-                    self.visual.debug("Results for query: {} on field: {}".format(query, field))
-                    self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in ids],
-                                                   self.entry_collection, additional_fields=list(map(str, scores)),
-                                                   print_newline=True)
-
-                for i in range(len(ids)):
-                    if ids[i] in results_ids:
-                        existing_idx = results_ids.index(ids[i])
-                        # replace score, if it's higher
-                        if scores[i] > match_scores[existing_idx]:
-                            match_scores[existing_idx] = scores[i]
-                    else:
-                        # if not there, just append
-                        results_ids.append(ids[i])
-                        match_scores.append(scores[i])
-
-            results_ids = sorted(zip(results_ids, match_scores), key=lambda x: x[1], reverse=True)
-            # apply max search results filtering
-            results_ids = results_ids[:self.max_search]
-            results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
-
-            self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
+            # ttr.reset_time(query)
+            # self.visual.log("Got query: {}".format(query))
+            # ttr.update_args(query)
+            # ttr.start()
+            # ttr.stop()
+            # results_ids = ttr.get_result()
+            results_ids = self.search_for_entry(query)
+            # results_ids = []
             just_began_search = False
             self.search_invoke_counter += 1
             if not self.visual.does_incremental_search:
                 break
+
+        if not query:
+            # no search was performed
+            return
         # push the reflist modification to history
         self.change_history(results_ids, "search:\"{}\"".format(query))
 
     # print entry, only fields of interest
-    def inspect_entries(self, ones_idxs):
-        for ones_idx in ones_idxs:
-            if not isinstance(ones_idx, int) or ones_idx > len(self.reference_entry_id_list) or ones_idx < 1:
-                self.visual.error("Invalid index: [{}], enter {} <= idx <= {}".format(ones_idx, 1, len(self.reference_entry_id_list)))
-                return
-
-        ids = [self.reference_entry_id_list[ones_idx - 1] for ones_idx in ones_idxs]
+    def show_entries(self, inp=None):
+        """Print contents of the entries in the input"""
+        nums = self.selector.select_by_index(inp)
+        if not nums:
+            self.visual.error("No selection to show.")
+            return
+        ids = [self.reference_entry_id_list[n] for n in nums]
         # self.visual.print("Entry #[{}]".format(ones_idx))
         self.visual.print_entries_contents([self.entry_collection.entries[ID] for ID in ids])
-        # self.visual.print_entry_contents(self.entry_collection.entries[ID])
 
+    def check(self, inp=None):
+        # idxs = self.selector.select(inp)
+        self.get_editor().check_consistency(self.entry_collection)
     # singleton getter fetcher
     def get_getter(self):
         if self.getter is None:
-            self.getter = Getter(self.conf)
+            self.getter = Getter(self.config)
         return self.getter
 
     # singleton searcher fetcher
@@ -146,13 +332,10 @@ class Runner:
             self.searcher = Searcher()
         return self.searcher
 
-    def get_config_update(self):
-        return self.config_update
-
     # singleton editor fetcher
     def get_editor(self):
         if self.editor is None:
-            self.editor = Editor(self.conf)
+            self.editor = Editor(self.config)
         return self.editor
 
     def string_to_entry_num(self, num_str):
@@ -172,24 +355,47 @@ class Runner:
     def unselect(self):
         self.cached_selection = None
 
-    def select(self, inp):
-        # no command offered: it's a number, select from results (0-addressable)
-        nums = utils.get_index_list(inp, len(self.reference_entry_id_list))
-        if nums is None:
-            self.visual.log("Invalid selection: {}".format(inp))
+
+    def get_index_from_id_list(self, entry_ids):
+        """Select item(s) from the entry list by their id"""
+        if type(entry_ids) is str:
+            entry_ids = [entry_ids]
+        # reset the referenct id list
+        self.reset_history()
+        idxs = []
+        for eid in entry_ids:
+            if eid not in self.reference_entry_id_list:
+                self.visual.error(f"Entry ID {eid} not in the current reference list!")
+                continue
+            # append one's index
+            idxs.append(1 + self.reference_entry_id_list.index(eid))
+        self.cached_selection = idxs
+
+    def debug(self):
+        """Enter debug mode"""
+        import ipdb; ipdb.set_trace()
+
+    def truncate(self, arg):
+        """Limit the number of displayed results"""
+        # limit the number of results
+        num = utils.get_single_index(arg)
+        if not num:
+            self.visual.error("Need number argument to apply result list truncation.")
             return
-        self.visual.log("Displaying {} {}: {}".format(len(nums), "entry" if len(nums) == 1 else "entries", nums))
-        self.inspect_entries(nums)
-        self.cached_selection = nums
+        self.max_search = num
+        self.max_list = num
+        # repeat last command, if applicable
+        self.command_parser.backtrack()
 
     def list(self, arg=None):
+        """List entries summary"""
 
         show_list = self.reference_entry_id_list
-        nums = self.get_index_selection(arg)
+        nums = self.selector.select_by_index(arg)
         if nums:
-            show_list = [self.reference_entry_id_list[n - 1] for n in nums]
-            if show_list != self.reference_entry_id_list:
-                # push the history change
+            show_list = [self.reference_entry_id_list[n] for n in nums]
+            if show_list != self.reference_entry_id_list and arg is not None:
+                # arguments specified directly; push the history change
                 self.change_history(show_list, "{} {}".format(self.commands.list, len(show_list)))
         else:
             show_list = self.reference_entry_id_list
@@ -212,12 +418,11 @@ class Runner:
         for x in self.reference_entry_id_list:
             entry = self.entry_collection.entries[x]
             value = getattr(entry, filter_key)
+            if value is None or len(value) == 0:
+                continue
+
             if type(value) == str:
                 value = value.lower()
-            else:
-                if value is None:
-                    continue
-
             searched_entry_ids.append(x)
             candidate_values.append(value)
 
@@ -233,19 +438,10 @@ class Runner:
             res = [(searched_entry_ids[r[1]], r[0][1]) for r in res]
         return res
 
-    # checks wether command and arguments are inserted at once
-    def check_dual_input(self, command):
-        if not command:
-            return "", None
-        parts = command.split(maxsplit=1)
-        cmd = parts[0]
-        if len(parts) == 1:
-            arg = None
-        else:
-            arg = parts[1]
-        return cmd, arg
-
     def jump_history(self, index):
+        """Jump to a specific history step"""
+        if type(index) is str:
+            index = utils.str_to_int(index)
         if self.reference_history_index == index:
             self.visual.error("Already on starting history.")
             return
@@ -261,9 +457,12 @@ class Runner:
         self.command_history = [(len(self.entry_collection.id_list), "<start>")]
         self.reference_history_index = 0
         self.unselect()
+        self.selector.update_reference(self.reference_entry_id_list)
 
     # move the reference list wrt stored history
-    def step_history(self, n_steps):
+    def step_history(self, n_steps=-1):
+        """Function to step +/- n steps to history"""
+        n_steps = utils.get_single_index(n_steps)
         self.visual.debug("Stepping through a {}-long history, current index: {}, current length: {}, step is {}".format(len(self.reference_history), self.reference_history_index, len(self.reference_entry_id_list), n_steps))
         if n_steps > 0:
             if self.reference_history_index + n_steps > len(self.reference_history) - 1:
@@ -279,12 +478,17 @@ class Runner:
         self.reference_entry_id_list = self.reference_history[self.reference_history_index]
         self.visual.log("Switched {} to {}-long reference list: {}.".format(switch_msg, len(self.reference_entry_id_list), self.command_history[self.reference_history_index]))
         self.list()
+        self.selector.update_reference(self.reference_entry_id_list)
 
     def show_history(self):
         current_mark = ["" for _ in self.command_history]
         current_mark[self.reference_history_index] = "*"
         self.visual.print_enum(self.command_history, additionals=current_mark)
         self.visual.debug("History length: {}, history lengths: {}, current index: {}, current length: {}.".format(len(self.reference_history), [len(x) for x in self.reference_history], self.reference_history_index, len(self.reference_entry_id_list)))
+
+    def show_log_history(self):
+        """Display the history of past logs"""
+        self.visual.print_enum(self.visual.log_history)
 
     def change_history(self, new_reflist, modification_msg):
         """Change the reference list to its latest modificdation
@@ -306,39 +510,13 @@ class Runner:
         self.reference_history_index += 1
         self.reference_entry_id_list = new_list
         self.visual.message("Switching to new {}-long reference list.".format(len(self.reference_entry_id_list)))
+        self.selector.update_reference(self.reference_entry_id_list)
 
         # store the command that produced it
         self.command_history.append((len(self.reference_entry_id_list), command))
 
-    def get_input(self, input_cmd):
-        if input_cmd is not None:
-            user_input = input_cmd
-            self.visual.debug("Got input from main: [{}]".format(input_cmd))
-            input_cmd = None
-        else:
-            self.visual.idle()
-            user_input = self.visual.receive_command()
-        return user_input, input_cmd
 
-    def get_index_selection(self, inp):
-        if not inp:
-            if self.cached_selection is not None:
-                return self.cached_selection
-            # no input provided
-            return []
-        else:
-            nums = utils.get_index_list(inp, len(self.reference_entry_id_list))
-            if utils.has_none(nums):
-                # non numeric input
-                return None
-            invalids = [x for x in nums if x > len(self.reference_entry_id_list)]
-            if invalids:
-                self.visual.error("Invalid index(es): {}".format(invalids))
-            nums = [x for x in nums if x not in invalids]
-            self.cached_selection = nums
-            return nums
-
-    def save_if_modified(self, verify_write=True, called_explicitely=False):
+    def save_if_modified(self, verify_write=True, called_explicitely=True):
         # collection
         modified_status = "*has been modified*" if self.modified_collection() else "has not been modified"
         if verify_write:
@@ -353,17 +531,17 @@ class Runner:
                 if not self.visual.yes_no("The collection {}. Overwrite?".format(modified_status), default_yes=False):
                     return
         # write
-        self.entry_collection.overwrite_file(self.conf)
+        self.entry_collection.overwrite_file(self.config)
         self.entry_collection.reset_modified()
-        # config
 
 
     def set_local_pdf_path(self, str_selection=None):
-        nums = self.get_index_selection(str_selection)
+        """Function to attach a local pdf path to an entry"""
+        nums = self.selector.select_by_index(str_selection)
         if nums is None or not nums or len(nums) > 1:
             self.visual.error("Need a single selection to set pdf to.")
             return
-        entry = self.entry_collection.entries[self.reference_entry_id_list[nums[0] - 1]]
+        entry = self.entry_collection.entries[self.reference_entry_id_list[nums[0]]]
         if entry.file is not None:
             if not self.visual.yes_no("Pdf attribute exists: {}, replace?".format(entry.file), default_yes=False):
                 return
@@ -371,19 +549,58 @@ class Runner:
         if self.editor.collection_modified and updated_entry is not None:
             self.entry_collection.replace(updated_entry)
             self.visual.log("Entry {} updated with pdf path.".format(entry.ID))
-        self.do_update_config = self.editor.collection_modified or self.do_update_config
+
+    def delete_entry(self, arg):
+        """Function to delete an entry"""
+        nums = self.selector.select_by_index(arg)
+        if nums is None or not nums:
+            self.visual.error("Need a selection to delete.")
+            return
+        to_delete = [self.reference_entry_id_list[n] for n in nums]
+        old_len, del_len = len(self.reference_entry_id_list), len(to_delete)
+        for entry_id in to_delete:
+            self.entry_collection.remove(entry_id)
+            self.visual.log("Deleted entry {}".format(entry_id))
+        remaining = [x for x in self.reference_entry_id_list if x not in to_delete]
+        self.visual.log("Deleted {}/{} entries, left with {}".format(del_len, old_len, len(remaining)))
+        self.push_reference_list(remaining, "deletion", force=True)
+        self.unselect()
+
+    def cite(self, arg=None):
+        """Function to cite an entry"""
+        nums = self.selector.select_by_index(arg)
+        if nums is None or not nums:
+            self.visual.error("Need a selection to cite.")
+            return
+        citation_id = ", ".join([self.reference_entry_id_list[n] for n in nums])
+        citation = "\\cite{{{}}}".format(citation_id)
+        # clipboard.copy(citation_id)
+        clipboard.copy(citation)
+        self.visual.message("Copied to clipboard: {}".format(citation))
+
+    def multi_cite(self, arg=None):
+        """Function to cite an entry for multi-entry citing"""
+        nums = self.selector.select_by_index(arg)
+        if nums is None or not nums:
+            self.visual.error("Need a selection to multi-cite.")
+            return
+        citation_id = ", ".join([self.reference_entry_id_list[n] for n in nums])
+        # clipboard.copy(citation_id)
+        clipboard.copy(citation_id)
+        self.visual.message("Copied to clipboard: {}".format(citation_id))
+
 
     def get_pdf_from_web(self, str_selection=None):
-        nums = self.get_index_selection(str_selection)
+        nums = self.selector.select_by_index(str_selection)
         if nums is None or not nums or len(nums) > 1:
             self.visual.error("Need a single selection to download pdf to.")
             return
-        entry_id = self.reference_entry_id_list[nums[0] - 1]
+        entry_id = self.reference_entry_id_list[nums[0]]
         entry = self.entry_collection.entries[entry_id]
         if entry.file is not None:
             if not self.visual.yes_no("Pdf attribute exists: {}, replace?".format(entry.file), default_yes=False):
                 return
-        getter = Getter(self.conf)
+        getter = Getter(self.config)
         pdf_url = self.visual.ask_user("Give pdf url to download", multichar=True)
         file_path = getter.download_web_pdf(pdf_url, entry_id)
         if file_path is None:
@@ -393,11 +610,14 @@ class Runner:
         self.entry_collection.replace(updated_entry)
 
     def search_web_pdf(self, str_selection=None):
-        nums = self.get_index_selection(str_selection)
+        """Search the web for a pdf pertaining to the current entry selection
+        """
+
+        nums = self.selector.select_by_index(str_selection)
         if nums is None or not nums or len(nums) > 1:
             self.visual.error("Need a single selection to download pdf to.")
             return
-        entry_id = self.reference_entry_id_list[nums[0] - 1]
+        entry_id = self.reference_entry_id_list[nums[0]]
         entry = self.entry_collection.entries[entry_id]
         if entry.file is not None:
             if not self.visual.yes_no("Pdf attribute exists: {}, replace?".format(entry.file), default_yes=False):
@@ -412,225 +632,18 @@ class Runner:
         self.entry_collection.replace(updated_entry)
 
     def loop(self, input_cmd=None):
-        previous_command = None
-        while(True):
-            # begin loop
-            user_input, input_cmd = self.get_input(input_cmd)
-            # check for dual input
-            command, arg = self.check_dual_input(user_input)
+        """Runner execution loop
+
+        :param input_cmd: On-launch input from the user
+
+        """
+        while(self.is_running):
+            command, arg = self.command_parser.get(input_cmd)
             self.visual.debug("Command: [{}] , arg: [{}]".format(command, arg))
+            # call the appropriate function
+            func = self.function_id_map[command]
+            func(*arg)
+            input_cmd = None
 
-            # check for repeat-command
-            if command == self.commands.repeat:
-                if previous_command is None:
-                    self.visual.debug("This is the first command.")
-                    continue
-                command = previous_command
-            if command == self.commands.quit:
-                break
-            # history
-            # -------------------------------------------------------
-            if command == self.commands.history_back:
-                n_steps = utils.str_to_int(arg, default=-1)
-                self.step_history(n_steps)
-            elif command == self.commands.history_forward:
-                n_steps = utils.str_to_int(arg, default=1)
-                self.step_history(n_steps)
-            elif command == self.commands.history_jump:
-                idx = utils.str_to_int(arg)
-                if idx is None:
-                    self.visual.error("Need history index to jump to.")
-                    continue
-                self.jump_history(idx - 1)
-            elif command == self.commands.history_reset:
-                self.visual.message("Resetting history.")
-                self.reset_history()
-            elif command == self.commands.history_show:
-                self.show_history()
-            # -------------------------------------------------------
-            elif command == self.commands.delete:
-                nums = self.get_index_selection(arg)
-                if nums is None or not nums:
-                    self.visual.error("Need a selection to delete.")
-                    continue
-                to_delete = [self.reference_entry_id_list[n - 1] for n in nums]
-                old_len, del_len = len(self.reference_entry_id_list), len(to_delete)
-                for entry_id in to_delete:
-                    self.entry_collection.remove(entry_id)
-                    self.visual.log("Deleted entry {}".format(entry_id))
-                remaining = [x for x in self.reference_entry_id_list if x not in to_delete]
-                self.visual.log("Deleted {}/{} entries, left with {}".format(del_len, old_len, len(remaining)))
-                self.push_reference_list(remaining, "deletion", force=True)
-                self.do_update_config = True
-                self.unselect()
-
-            # latex citing
-            elif utils.matches(command, self.commands.cite):
-                nums = self.get_index_selection(arg)
-                if nums is None or not nums:
-                    self.visual.error("Need a selection to cite.")
-                    continue
-                citation_id = ", ".join([self.reference_entry_id_list[n - 1] for n in nums])
-                citation = "\\cite{{{}}}".format(citation_id)
-                # clipboard.copy(citation_id)
-                clipboard.copy(citation)
-                self.visual.message("Copied to clipboard: {}".format(citation))
-
-            # latex citing
-            elif utils.matches(command, self.commands.cite_multi):
-                nums = self.get_index_selection(arg)
-                if nums is None or not nums:
-                    self.visual.error("Need a selection to multi-cite.")
-                    continue
-                citation_id = ", ".join([self.reference_entry_id_list[n - 1] for n in nums])
-                # clipboard.copy(citation_id)
-                clipboard.copy(citation_id)
-                self.visual.message("Copied to clipboard: {}".format(citation_id))
-            # -------------------------------------------------------
-            # adding local paths to pdfs
-            elif command.startswith(self.commands.pdf_file):
-                self.set_local_pdf_path(arg)
-            # fetching pdfs from a web URL
-            elif command == self.commands.pdf_web:
-                self.get_pdf_from_web(arg)
-            # searching for a pdf in an external browser
-            elif command == self.commands.pdf_search:
-                self.search_web_pdf(arg)
-            # searching
-            elif command.startswith(self.commands.search):
-                query = arg if arg else ""
-                if command == self.commands.search and not arg:
-                    pass
-                else:
-                    query = str(command[len(self.commands.search):]) + query
-                self.search(query)
-            # listing
-            elif utils.matches(command, self.commands.list):
-                self.list(arg)
-            # adding tags
-            elif utils.matches(command, self.commands.tag):
-                nums = self.get_index_selection(arg)
-                if nums is None or not nums:
-                    self.visual.error("Need a selection to tag.")
-                    continue
-                for num in nums:
-                    entry = self.entry_collection.entries[self.reference_entry_id_list[num - 1]]
-                    updated_entry = self.get_editor().tag(entry)
-                    if self.editor.collection_modified and updated_entry is not None:
-                        self.entry_collection.replace(updated_entry)
-                self.editor.clear_cache()
-            # opening pdfs
-            elif utils.matches(command, self.commands.pdf_open):
-                nums = self.get_index_selection(arg)
-                if not nums or nums is None:
-                    self.visual.print("Need a selection to open.")
-                # arg has to be a single string
-                nums = self.get_index_selection(arg)
-                if utils.has_none(nums):
-                    self.visual.print("Need a valid entry index.")
-                for num in nums:
-                    entry_id = self.reference_entry_id_list[num - 1]
-                    entry = self.entry_collection.entries[entry_id]
-                    pdf_in_entry = self.get_editor().open(entry)
-                    if not pdf_in_entry and len(nums) == 1:
-                        if self.visual.yes_no("Search for pdf on the web?"):
-                            self.search_web_pdf()
-
-            # fetch bibtexs from the web
-            elif utils.matches(command, self.commands.get):
-                getter = self.get_getter()
-                if not arg:
-                    arg = self.visual.ask_user("Search what on the web?", multichar=True)
-                    if not arg:
-                        self.visual.error("Nothing entered, aborting.")
-                        continue
-                try:
-                    res = getter.get_web_bibtex(arg)
-                except Exception as ex:
-                    self.visual.error("Failed to complete the query: {}.".format(ex))
-                    continue
-                if not res:
-                    self.visual.error("No data retrieved.")
-                    continue
-
-                reader2 = Reader(self.conf)
-                read_entries_dict = reader2.read_entry_list(res)
-                self.visual.log("Retrieved {} entry item(s) from query [{}]".format(len(read_entries_dict), arg))
-
-                # select subset
-                if len(read_entries_dict) > 1:
-                    ids, content = list(zip(*[(e.ID, e.get_discovery_view()) for e in read_entries_dict.values()]))
-                    _, selected_ids = self.visual.user_multifilter(content, header=Entry.discovery_keys, reference=ids)
-                    selected_entries = [v for (k, v) in read_entries_dict.items() if k in selected_ids]
-                else:
-                    selected_entries = list(read_entries_dict.values())
-                if not selected_entries:
-                    continue
-                self.visual.print_entries_contents(selected_entries)
-                if not self.visual.yes_no("Store?"):
-                    continue
-                for entry in selected_entries:
-                    created = self.entry_collection.create(entry)
-                if not self.visual.yes_no("Select it?"):
-                    continue
-                if not created:
-                    continue
-                self.reset_history()
-                self.cached_selection = [i + 1 for i in range(len(self.reference_entry_id_list)) if self.reference_entry_id_list[i] in read_entries_dict]
-                self.visual.message("Item is now selected: {}.".format(self.cached_selection))
-
-                # pdf
-                what = self.visual.ask_user("Pdf?", "local url web-search *skip")
-                if utils.matches(what, "skip"):
-                    continue
-                if utils.matches(what, "url"):
-                    self.get_pdf_from_web()
-                    continue
-                if utils.matches(what, "local"):
-                    self.set_local_pdf_path()
-                    continue
-                if utils.matches(what, "web-search"):
-                    self.search_web_pdf()
-
-            # save collection
-            elif utils.matches(command, self.commands.save):
-                self.save_if_modified(called_explicitely=True)
-                continue
-            elif command == self.commands.clear:
-                self.visual.clear()
-            elif command == self.commands.unselect:
-                self.cached_selection = None
-            elif command == self.commands.show:
-                if self.cached_selection is not None:
-                    self.select(self.cached_selection)
-                else:
-                    self.visual.error("No selection to show.")
-            elif command == self.commands.up:
-                self.visual.up()
-            elif command == self.commands.down:
-                self.visual.down()
-            elif command == self.commands.truncate:
-                # limit the number of results
-                num = utils.get_single_index(arg)
-                if not num:
-                    self.visual.error("Need number argument to apply result list truncation.")
-                    continue
-                self.max_search = num
-                self.max_list = num
-                # repeat last command, if applicable
-                if previous_command is not None:
-                    command = previous_command
-            elif utils.is_index_list(command):
-                # print(self.reference_entry_id_list)
-                # for numeric input, select these entries
-                self.select(user_input)
-            elif command == self.commands.check:
-                self.get_editor().check_consistency(self.entry_collection)
-            else:
-                self.visual.error("Undefined command: {}".format(command))
-                self.visual.message("Available:")
-                skeys = sorted(self.commands_dict.keys())
-                self.visual.print_enum(list(zip(skeys, [self.commands_dict[k] for k in skeys])), at_most=None, header="action key".split())
-            previous_command = command
         # end of loop
-        self.save_if_modified()
+        self.save_if_modified(called_explicitely=False)

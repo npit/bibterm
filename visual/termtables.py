@@ -19,23 +19,25 @@ class TermTables(Io):
         if TermTables.instance is not None:
             return TermTables.instance
         if conf is None:
-            self.error("Need configuration to instantiate visual")
+            TermTables.error("Need configuration to instantiate visual")
         print("Instantiating the {} ui".format(TermTables.name))
         TermTables.instance = TermTables(conf)
         return TermTables.instance
 
-    def gen_entry_strings(self, entry, maxlens=None):
-        # do not limit / pad lengths
-        return (self.ID_str(entry.ID, None), self.title_str(entry.title, len(entry.title)), self.keyword_str(entry.keywords))
+    # def gen_entry_strings(self, entry, maxlens=None):
+    #     # do not limit / pad lengths
+    #     return (self.ID_str(entry.ID, None), self.title_str(entry.title, len(entry.title)), self.keyword_str(entry.keywords))
 
-    def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False):
-        if self.only_debug and not self.do_debug:
+    def print_entries_enum(self, x_iter, entry_collection, at_most=None, print_newline=False):
+        if (self.only_debug and not self.do_debug) or not x_iter:
             return
         if not x_iter:
             return
-        entries_strings = self.gen_entries_strings(x_iter, additional_fields)
-        # strings = ["{} {} {}".format(*tup) for tup in entries_strings]
-        self.print_enum(entries_strings, at_most=at_most, header=["id", "title", "tags"], preserve_col_idx=[0])
+        cols = self.conf.get_user_settings()['view_columns']
+        cols = self.conf.get_default_view_columns() if not cols else cols
+        entries_strings = self.gen_entries_strings(x_iter, cols)
+
+        self.print_enum(entries_strings, at_most=at_most, additionals=None, header=cols, preserve_col_idx=[0])
         if print_newline:
             self.newline()
 
@@ -79,7 +81,6 @@ class TermTables(Io):
         contents = self.get_entry_contents(entry)
         contents = [["attribute", "value"]] + list(contents.items())
         self.print(self.get_table(contents))
-
 
     # get table column max lengths, considering newline elements
     def get_table_column_max_widths(self, data):
@@ -151,7 +152,8 @@ class TermTables(Io):
         return content
 
     def print_enum(self, x_iter, at_most=None, additionals=None, header=None, preserve_col_idx=None):
-        """Print collection, with a numeric column per line"""
+        """Print collection, with a numeric column per line
+        """
         if preserve_col_idx is None:
             preserve_col_idx = []
         if self.only_debug and not self.do_debug:

@@ -16,6 +16,8 @@ class Searcher:
         return query
 
     def fuzzy_search(self, query, candidates, at_most, iterable_items=False):
+        """Perform a fuzzy search
+        """
         query = self.preprocess_query(query)
         if iterable_items:
             # flatten

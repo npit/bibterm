@@ -2,6 +2,7 @@ import collections
 import json
 import os
 import re
+import time
 from collections import OrderedDict
 from os.path import basename, exists, join
 
@@ -28,6 +29,7 @@ class EntryCollection:
         return {"keep": list(self.keyword2id.keys()), "map": self.keywords_map}
 
     def __init__(self, bib_db, tags_info):
+        """Entry collection costructor"""
         self.bibtex_db = bib_db
         self.title2id = {}
         self.author2id = {}
@@ -54,13 +56,14 @@ class EntryCollection:
             self.entry_index = i
             entry = bib_db.entries[i]
             ent = Entry(entry)
-            self.insert(ent)
+            ent = self.fix_entry(ent)
+            ent = self.add_entry_to_collection_containers(ent)
         # self.check_for_missing_fields()
 
     # check and log missing entry elements
     def check_for_missing_fields(self):
         missing_per_entry = {}
-        missing_per_field = {"pages": [], "publisher":[]}
+        missing_per_field = {"pages": [], "publisher": []}
         for e in self.entries.values():
             fields = []
             if not e.has_pages():
@@ -96,14 +99,15 @@ class EntryCollection:
             self.title_list.remove(title)
             del self.title2id[title]
 
-    def remove(self, ID):
+    def remove(self, ID, do_modify=True):
         # bibtex_db containers
         del self.bibtex_db.entries_dict[ID]
         idx = [i for i in range(len(self.bibtex_db.entries)) if self.bibtex_db.entries[i]["ID"] == ID]
-        if len(idx) > 1:
-            self.visual.error("Mutiple indexes with ID {} found to remove.".format(ID))
+        if len(idx) != 1:
+            self.visual.error("Mutiple/no indexes with ID {} found to remove: {}.".format(ID, idx))
             exit(1)
         del self.bibtex_db.entries[idx[0]]
+        self.visual.log(f"Removed ID: {ID}, index: {idx[0]}")
         # containers
         ID = ID.lower()
         title = self.entries[ID].title.lower()
@@ -111,16 +115,19 @@ class EntryCollection:
         self.id_list.remove(ID)
         self.title_list.remove(title)
         del self.title2id[title]
-        self.modified_collection = True
+        if do_modify:
+            self.modified_collection = True
 
     def replace(self, ent):
+        # fix
+        ent = self.fix_entry(ent)
         # keep copies of id and title lists to preserve order
         id_idx = self.id_list.index(ent.ID.lower())
         title_idx = self.title_list.index(ent.title.lower())
         # remove existing
         self.remove(ent.ID)
         # insert it
-        self.create(ent)
+        self.add_entry(ent, can_replace=False, can_fix=False)
         # remove from back
         self.id_list.pop()
         self.title_list.pop()
@@ -130,23 +137,8 @@ class EntryCollection:
         self.title_list.insert(title_idx, ent.title.lower())
         self.modified_collection = True
 
-    def correct_id(self, current_id, expected_id):
-        # id
-        self.visual.log("Correcting {}/{} (#{} fixed, {} fixes) id {} -> {}.".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, current_id, expected_id))
-        # entries dict
-        if expected_id in self.bibtex_db.entries_dict:
-            self.visual.log("Correcting {} to {exp}, but {exp} already exists in underlying bibtex db.".format(current_id, exp=expected_id))
-            exit(1)
-        # assign the new dict key
-        self.bibtex_db.entries_dict[expected_id] = self.bibtex_db.entries_dict[current_id]
-        # delete existing key
-        del self.bibtex_db.entries_dict[current_id]
-
-        # entries list
-        for i in range(len(self.bibtex_db.entries)):
-            if self.bibtex_db.entries[i]["ID"] == current_id:
-                self.bibtex_db.entries[i]["ID"] = expected_id
-                break
+    def has_entry(self, entry_id):
+        return entry_id in self.id_list
 
     def add_keyword_instance(self, kw, entry_id):
         if kw not in self.keyword2id:
@@ -162,8 +154,10 @@ class EntryCollection:
             self.add_keyword_instance(nkw, entry_id)
 
     def handle_keywords(self, ent, index_id):
+        """Apply corrections to an entry's keywords"""
         applied_changes = False
         if ent.keywords is None:
+            ent.keywords = []
             return ent, False
         keywords = []
         keywords_final = []
@@ -244,6 +238,7 @@ class EntryCollection:
         return ent, applied_changes
 
     def fix_entry(self, ent):
+        """Fix inconsistencies and formatting deviations for the entry"""
         fixed_entry = False
         ID = ent.ID
         title = ent.title
@@ -266,8 +261,8 @@ class EntryCollection:
             if "-" in authorname:
                 authorname = authorname.split("-")[0]
             authorname = re.sub('[^a-zA-Z]+', '', authorname)
-            # remove stopwords, get first word
-            title_first = [x for x in title.strip().lower().split() if x not in stopwords]
+            # remove stopwords and numerals, get first word
+            title_first = [x for x in title.strip().lower().split() if x not in stopwords and not x.isdigit()]
             title_first = title_first[0]
             for x in ["-", "/"]:
                 if x in title:
@@ -279,18 +274,10 @@ class EntryCollection:
                 if self.need_fix(ID, "expected id: {}".format(expected_id)):
                     # correct the citation id
                     self.fixes += 1
-                    self.correct_id(ID, expected_id)
-                    ent.ID = expected_id
-                    ID = expected_id
+                    ent.set_id(expected_id)
+                    # ent.ID = expected_id
+                    # ID = expected_id
                     fixed_entry = True
-        ent, applied_changes = self.handle_keywords(ent, ID)
-        if applied_changes:
-            fixed_entry = True
-            kw_str = ",".join(ent.keywords)
-            self.bibtex_db.entries_dict[ID]["keywords"] = kw_str
-            for i in range(len(self.entries)):
-                if self.bibtex_db.entries[i]["ID"] == ID:
-                    self.bibtex_db.entries[i]["keywords"] = kw_str
         # fix title
         if title != title.strip() or title.strip()[-1] == ".":
             if self.need_fix(ID, "title artifacts: '{}'".format(title)):
@@ -300,19 +287,18 @@ class EntryCollection:
                     title = title[:-1]
                 self.fixes += 1
                 self.visual.log("Correcting {}/{} (#{} fixed, {} fixes) [title] [{}] -> [{}].".format(self.entry_index + 1, len(self.bibtex_db.entries), self.entries_fixed + 1, self.fixes, ent.title, title))
-                # set it to the bibtex dict
-                self.bibtex_db.entries_dict[ID]["title"] = title
-                # set it to the bibtex list
-                for i in range(len(self.entries)):
-                    if self.bibtex_db.entries[i]["ID"] == ID:
-                        self.bibtex_db.entries[i]["title"] = title
-                ent.title = title
+                # ent.title = title
+                ent.set_title(title)
                 fixed_entry = True
+
+        # keywords
+        ent, applied_changes = self.handle_keywords(ent, ID)
+        if applied_changes:
+            fixed_entry = True
+            ent.set_keywords(ent.keywords)
+
         if fixed_entry:
             self.entries_fixed += 1
-        else:
-            # self.visual.print("Did not correct entry {}/{} id: {}.".format(self.entry_index + 1, len(self.bibtex_db.entries), ent.ID))
-            pass
         return ent
 
     def need_fix(self, entry_id, problem):
@@ -328,32 +314,52 @@ class EntryCollection:
             return self.do_fix
         return fix
 
-    def create(self, ent, position=None):
-        inserted = self.insert(ent, can_fix=False)
-        if not inserted:
-            return False
-        if position is None:
-            self.bibtex_db.entries.append(ent.raw_dict)
-        else:
-            self.bibtex_db.entries.insert(ent.raw_dict, position)
+    def add_entry(self, ent, can_replace=True, can_fix=True):
+        """Add input entry to the collection"""
+        if can_fix:
+            ent = self.fix_entry(ent)
+
+        if self.has_entry(ent.ID):
+            if not can_replace:
+                self.visual.error(f"Entry {ent.ID} already exists in the collection!")
+                return None
+            # delete existing, to replace
+            self.remove(ent)
+        ent = self.add_entry_to_collection_containers(ent)
+        if ent is None:
+            return ent
+        self.add_entry_to_bibtex_db(ent)
+        return ent
+
+    def add_new_entry(self, ent):
+        """Add a new entry to the collection"""
+        ent.inserted = time.strftime("%D")
+        ent = self.add_entry(ent)
+        if ent is not None:
+          self.modified_collection = True
+        return ent
+
+    def add_entry_to_bibtex_db(self, ent):
+        """Create a new, non-existing, no-fixin-needing entry"""
+
+        # add additional fields manually to the dict
+        ent.consolidate_dict()
+        self.bibtex_db.entries.append(ent.raw_dict)
         # the following updates the entries dict
         self.bibtex_db.get_entry_dict()
         # make sure it's there
         if ent.ID not in self.bibtex_db.entries_dict:
-            # self.visual.warn("Non existing ID on bibtex dict: {}, adding.".format(ent.ID))
             self.bibtex_db.entries_dict[ent.ID] = ent.raw_dict
-        self.modified_collection = True
-        return True
 
-    def insert(self, ent, can_fix=True):
-        if can_fix:
-            ent = self.fix_entry(ent)
+    def add_entry_to_collection_containers(self, ent):
+        """Update utility containers (dicts, lists, etc.) of the entry collection class"""
+
         ID = ent.ID.lower()
         title = ent.title.lower()
         # update object lookup dict
         if ID in self.entries:
             self.visual.error("Entry with id {} already in entries dict!".format(ID))
-            return False
+            return None
         self.entries[ID] = ent
         # update title-id mapping
         self.title2id[title] = ID
@@ -372,7 +378,7 @@ class EntryCollection:
             self.maxlen_title = len(ent.title)
         if ent.file:
             self.all_pdf_paths.append(ent.file)
-        return True
+        return ent
 
     def find_ID_(self, thelist, ID):
         for i in range(len(self.entries)):
@@ -435,8 +441,9 @@ class Entry:
     url = None
     volume = None
     year = None
+    inserted = None
 
-    useful_keys = ["ENTRYTYPE", "ID", "author", "title", "year", "keywords", "file"]
+    useful_keys = ["ENTRYTYPE", "ID", "author", "title", "year", "keywords", "file", "tags", "inserted"]
     shorthand_keys = ["ID", "author", "title"]
     # keys to identify new arrivals
     discovery_keys = ["title", "year", "author"]
@@ -445,6 +452,13 @@ class Entry:
     def from_dict(ddict):
         e = Entry(ddict)
         return e
+
+    def get_value(self, key, postproc=False):
+        value = self.raw_dict[key]
+        if postproc:
+            if type(value) is list:
+                value = ",".join([str(x) for x in value])
+        return value
 
     def set_dict_value(self, key, value):
         if key == "pages":
@@ -455,11 +469,14 @@ class Entry:
             pass
         self.raw_dict[key] = value
 
-
     def __init__(self, kv):
         for key in kv:
             self.__setattr__(key, kv[key])
         self.raw_dict = kv
+
+    def consolidate_dict(self):
+        """Add entry fields to the raw dictionary"""
+        self.raw_dict["inserted"] = self.inserted
 
     def get_raw_dict(self):
         return self.raw_dict
@@ -469,8 +486,10 @@ class Entry:
 
     def has_keywords(self):
         return self.keywords is not None
+
     def has_publisher(self):
         return self.publisher is not None
+
     def has_pages(self):
         return self.pages is not None
 
@@ -487,7 +506,7 @@ class Entry:
         self.file = file_path
 
     def set_keywords(self, kw):
-        self.raw_dict["keywords"] = kw
+        self.set_dict_value("keywords", kw)
         self.keywords = kw
 
     def get_discovery_view(self):
@@ -523,8 +542,19 @@ class Entry:
         keys = [k for k in keys if k in x.keys()]
         return ". ".join(["{}: {}".format(k, x[k]) for k in keys])
 
-class Reader:
+    def __repr__(self):
+        return self.__str__()
 
+    def set_title(self, title):
+        self.title = title
+        self.set_dict_value("title", title)
+
+    def set_id(self, ID):
+        self.ID = ID
+        self.set_dict_value("ID", ID)
+
+
+class Reader:
     def __init__(self, conf=None):
         "docstring"
 
@@ -533,11 +563,11 @@ class Reader:
         Entry.visual = self.visual
         EntryCollection.visual = self.visual
         try:
-            self.bib_path = conf.user_settings["bib_path"]
+            self.bib_path = conf.get_user_settings()["bib_path"]
         except KeyError:
             self.visual.fatal_error("No bib_path set in user_settings!")
         self.tags_path = os.path.splitext(self.bib_path)[0] + ".tags.json"
-        self.temp_dir = "/tmp/bib/"
+        self.temp_dir = self.conf.get_tmp_dir()
         os.makedirs(self.temp_dir, exist_ok=True)
 
     def customizations(record):

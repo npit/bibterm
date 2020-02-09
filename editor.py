@@ -4,6 +4,7 @@ from os import listdir, remove, rename, system
 from os.path import basename, dirname, exists, isabs, isdir, join, splitext
 
 import utils
+from decorators import ignore_arg
 from getters.getter import Getter
 from visual.instantiator import setup
 
@@ -11,14 +12,26 @@ from visual.instantiator import setup
 class Editor:
 
     def __init__(self, conf):
-        self.conf = conf
+        self.config = conf
         self.visual = setup(conf)
         self.collection_modified = False
         self.clear_cache()
-        if conf.pdf_dir is None:
-            self.pdf_dir = join(dirname(self.conf.user_settings.bib_path), "pdfs")
-        else:
-            self.pdf_dir = conf.pdf_dir
+        self.pdf_dir = self.config.get_pdf_dir()
+
+    @ignore_arg
+    def edit_settings(self):
+        """Function to edit program user settings"""
+        curr_settings = list(self.config.get_user_settings().items())
+        selected, _ = self.visual.user_multifilter(curr_settings, "setting value".split(), message="Select setting to update")
+        if not selected:
+            return
+        for key, old_value in selected:
+            new_value = self.visual.ask_user(f"Enter new value for setting: [{key}]")
+            status, error_msg = self.config.update_user_setting(key, new_value)
+            if not status:
+                self.visual.error(f"Erroneous value entered: {error_msg}, aborting.")
+                return
+        self.visual.message("Update complete.")
 
     def check_pdf_naming_consistency(self, entry_collection):
         # check for missing pdfs
@@ -129,7 +142,7 @@ class Editor:
         if missing_per_entry:
             self.visual.message("Missing {} distinct fields from {} entries".format(len(missing_per_field), len(missing_per_entry)))
             if self.visual.yes_no("Search bibtexs to complete the entries?"):
-                gt = Getter(self.conf)
+                gt = Getter(self.config)
                 for eidx, (entryid, fields) in enumerate(missing_per_entry.items()):
                     # search by title
                     title = entry_collection.entries[entryid].title
@@ -238,7 +251,8 @@ class Editor:
         self.collection_modified = True
         return entry
 
-    def open(self, entry):
+    def open_pdf(self, entry):
+        """Opens the pdf in the associated entry"""
         if not entry.has_file():
             self.visual.error("No file field in entry {}".format(entry.ID))
             return False
@@ -247,7 +261,7 @@ class Editor:
             if self.make_canonic_pdf_name(file_path, entry):
                 file_path = self.get_entry_canonic_pdf_path(entry)
             self.visual.print("Opening: {}".format(file_path))
-            system("/usr/bin/xdg-open '{}'".format(file_path))
+            system("/usr/bin/xdg-open '{}' & disown".format(file_path))
         else:
             self.visual.error("Entry file path does not exist: {}".format(file_path))
         return True

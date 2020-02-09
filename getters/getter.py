@@ -9,9 +9,9 @@ from visual import instantiator
 
 
 class Getter:
-    def __init__(self, conf):
-        self.conf = conf
-        self.visual = instantiator.setup(conf)
+    def __init__(self, config):
+        self.config = config
+        self.visual = instantiator.setup(config)
         self.do_udpate_config = False
         self.browser = "firefox"
 
@@ -23,31 +23,32 @@ class Getter:
 
     def configure(self):
         try:
-            self.browser = self.conf.user_settings["browser"]
+            self.browser = self.config.get_user_setting["browser"]
         except KeyError:
             pass
 
-        self.pdf_apis = self.conf.pdf_apis
-        self.bibtex_apis = self.conf.bibtex_apis
-        self.num_retrieved_bibtex = self.conf.num_retrieved_bibtex
+        self.pdf_apis = self.config.pdf_apis
+        self.bibtex_apis = self.config.bibtex_apis
+        self.num_retrieved_bibtex = self.config.num_retrieved_bibtex
 
         # instantiate user selections
         self.instantiate_selected_apis()
 
+        self.pdf_dir = self.config.get_pdf_dir()
         if not self.check_create_pdf_dir():
-            self.visual.error("Pdf directory {} does not exist nor could it be created.".format(self.conf.pdf_dir))
+            self.visual.error("Pdf directory {} does not exist nor could it be created.".format(self.pdf_dir))
 
 
     def instantiate_selected_apis(self):
         try:
-            name, params = self.conf.user_settings["pdf_getter"], self.conf.user_settings["pdf_getter_params"]
+            name, params = self.config.get_user_setting["pdf_getter"], self.config.get_user_setting["pdf_getter_params"]
             self.pdf_api = self.instantiate_api(name, params)
         except KeyError:
             pass
         except Exception:
-            self.visual.error("Failed to instantiate {} api with supplied params {}.".format(name, params))
+            self.visual.error("Failed to instantiate {} pdf api with supplied params {}.".format(name, params))
         try:
-            name, params = self.conf.user_settings["bibtex_getter"], self.conf.user_settings["bibtex_getter_params"]
+            name, params = self.config.get_user_setting["bibtex_getter"], self.config.get_user_setting["bibtex_getter_params"]
             self.bibtex_api = self.instantiate_api(name, params)
         except KeyError:
             pass
@@ -81,9 +82,9 @@ class Getter:
             self.pdf_api = self.instantiate_api(res)
 
     def check_create_pdf_dir(self):
-        if not exists(self.conf.pdf_dir):
-            if self.visual.yes_no("Pdf directory {} does not exist -- create?".format(self.conf.pdf_dir)):
-                makedirs(self.conf.pdf_dir)
+        if not exists(self.pdf_dir):
+            if self.visual.yes_no("Pdf directory {} does not exist -- create?".format(self.pdf_dir)):
+                makedirs(self.pdf_dir)
                 return True
             return False
         return True
@@ -96,7 +97,7 @@ class Getter:
         return res
 
     def download_web_pdf(self, web_path, entry_id):
-        local_output_path = join(self.conf.pdf_dir, "{}.pdf".format(entry_id))
+        local_output_path = join(self.pdf_dir, "{}.pdf".format(entry_id))
         return self.pdf_api.download_web_pdf(web_path, local_output_path)
 
     def search_web_pdf(self, entry_id, entry_title, entry_year):

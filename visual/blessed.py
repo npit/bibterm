@@ -1,3 +1,5 @@
+import threading
+
 import utils
 from blessed import Terminal
 # from visual.io import Io
@@ -33,6 +35,10 @@ class Blessed(TermTables):
     does_incremental_search = True
     message_buffer_size = None
     use_buffer = None
+
+    access_lock = None
+
+    search_time_delta = 1
 
     # metakey handling (e.g. C-V)
     key_codes = {'\x16': ('C-V', lambda x: utils.paste())
@@ -122,13 +128,19 @@ class Blessed(TermTables):
         self.commands = conf.controls
         self.selection_commands = conf.selection_commands
 
+        # threading lock
+        self.access_lock = threading.Lock()
+
     def print_to_layout(self, msg, prompt, layout, do_clear=True, max_size=None):
         if do_clear:
             self.clear_line(layout.y, layout.x)
         self.temp_print(prompt + ": " + msg, *layout.values(), max_size=max_size)
 
     def log(self, msg):
+        self.access_lock.acquire()
+        self.log_history.append(msg)
         self.print_to_layout(msg, "Log", self.layout.log, do_clear=True, max_size=self.layout.log.w)
+        self.access_lock.release()
 
     def command(self, msg):
         if msg is None:
@@ -220,7 +232,10 @@ class Blessed(TermTables):
             self.search_cache_underflow = False
         if done is False:
             self.clear_data()
-        self.message("{} {}".format(done, self.search_cache))
+        self.message("rcv. search: {} {}".format(done, self.search_cache))
+        # update potentially fudged borders
+        self.draw_static()
+        # return results
         return done, self.search_cache
 
     def get_command_full_name(self, cmd):

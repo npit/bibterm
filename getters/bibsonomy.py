@@ -38,10 +38,13 @@ class BibsonomyGetter(BaseGetter):
             if k == 'bibtexKey':
                 rdict['ID'] = rdict[k]
                 del rdict[k]
-            if k == self.ignore_keys:
+            elif k in self.ignore_keys:
                 del rdict[k]
-            if k == "author":
+            elif k == "author":
                 rdict[k] = [x.strip() for x in rdict[k].split("and")]
+            elif k == "entrytype":
+                rdict[k.upper()] = rdict[k]
+                del rdict[k]
         return rdict
 
     def get_bibtex(self, query):

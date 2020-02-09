@@ -16,13 +16,17 @@ class Io:
     handles_max_results = None
 
     does_incremental_search = False
+    search_time_delta = 0
+
+    log_history = []
 
     def set_only_debug(self, val):
         self.only_debug = val
 
     def __init__(self, conf):
-        self.do_debug = conf.debug
+        self.do_debug = conf.get_debug()
         self.handles_max_results = True
+        self.conf = conf
 
     @staticmethod
     def get_instance(conf=None):
@@ -55,6 +59,7 @@ class Io:
         exit(1)
 
     def log(self, msg):
+        self.log_history.append(msg)
         self.print(msg)
 
     def message(self, msg):
@@ -159,7 +164,7 @@ class Io:
             # valid or no-option input
             return ans
 
-    def user_multifilter(self, collection, header, reference=None, print_func=None, preserve_col_idx=None):
+    def user_multifilter(self, collection, header, reference=None, print_func=None, preserve_col_idx=None, message=None):
         """Filtering function by user index selection. Reference can be used to keep track of input items"""
         if reference is None:
             reference = list(range(len(collection)))
@@ -169,22 +174,32 @@ class Io:
         cur_reference, cur_collection = reference, collection
         while True:
             print_func(cur_collection, header=header, preserve_col_idx=preserve_col_idx)
-            sel = self.ask_user("Enter numeric indexes to modify the list, q to select none, or ENTER to proceed")
-            if sel == "q":
-                return [], []
-            sel = utils.get_index_list(sel, len(cur_collection))
-            if sel:
-                sel = sorted(set(sel))
-                cur_collection = [cur_collection[i-1] for i in sel]
-                cur_reference = [cur_reference[i-1] for i in sel]
+            prompt = "{}Enter numeric indexes to modify the list, q to select none, or ENTER to proceed".format(message + ". " if message is not None else "")
+            idxs = None
+            while True:
+                str_inp = self.ask_user(prompt)
+                if str_inp == "q":
+                    return [], []
+                idxs = utils.get_index_list(str_inp, len(cur_collection))
+                if idxs is None:
+                    self.error("Invalid input: [{}], please read the instructions.".format(str_inp))
+                    continue
+                break
+            if idxs:
+                # subset was selected
+                sel = sorted(set(idxs))
+                cur_collection = [cur_collection[i-1] for i in idxs]
+                cur_reference = [cur_reference[i-1] for i in idxs]
                 # return immediately for single-selections
                 if len(cur_collection) == 1:
                     return cur_collection, cur_reference
+
+                print_func(cur_collection, header=header, preserve_col_idx=preserve_col_idx)
                 # confirm for larger ones
                 if self.ask_user("Keep these?", "*yes no(reset)") == "yes":
-                    print_func(cur_collection, header=header, preserve_col_idx=preserve_col_idx)
                     return cur_collection, cur_reference
                 else:
+                    # no subset was selected (return original collection)
                     cur_collection = collection
                     cur_reference = reference
             else:
@@ -246,17 +261,26 @@ class Io:
                 self.title_str(entry.title, maxlens[2]), self.keyword_str(entry.keywords))
 
     # produce enumeration strings
-    def gen_entries_strings(self, entries, additional_fields):
-        maxlen_id = max([len(x.ID) for x in entries])
-        maxlen_title = max([len(x.title) for x in entries])
-        maxlens = len(entries), maxlen_id, maxlen_title
-        enum_str_list = []
-        for i, entry in enumerate(entries):
-            st = self.gen_entry_strings(entry, maxlens)
-            if additional_fields:
-                st += additional_fields[i]
-            enum_str_list.append(self.gen_entry_strings(entry, maxlens))
-        return enum_str_list
+    def gen_entries_strings(self, entries, cols):
+        # get listable elements from the entry based on the config
+        # collect data
+        data = []
+        for col in cols:
+            # get column data
+            col_data = [x.get_value(col, postproc=True) for x in entries]
+            data.append(col_data)
+            # col_maxlen = max([len(x) for x in col_data])
+
+        # maxlen_id = max([len(x.ID) for x in entries])
+        # maxlen_title = max([len(x.title) for x in entries])
+        # maxlens = len(entries), maxlen_id, maxlen_title
+
+        # enum_str_list = []
+        # for i, entry in enumerate(entries):
+        #     st = self.gen_entry_strings(entry, maxlens)
+        #     enum_str_list.append(self.gen_entry_strings(entry, maxlens))
+        data = list(zip(*data))
+        return data
 
     # print iff in debug mode
     def debug(self, msg):

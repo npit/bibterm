@@ -1,7 +1,25 @@
-import string
+import time
 from collections import namedtuple
+from os.path import basename, join
+from shutil import copyfile
 
 import clipboard
+
+
+class Backup:
+    """Backup file manager"""
+    def __init__(self, output_path, temp_dir):
+        self.output_path = output_path
+        self.backup_path = join(temp_dir, basename(output_path))
+        copyfile(output_path, self.backup_path)
+
+    def restore(self):
+        copyfile(self.backup_path, self.output_path)
+
+
+# datetime for timestamps
+def datetime_str():
+    return time.strftime("%d%m%y_%H%M%S")
 
 
 # convert objetct / members to list
@@ -12,8 +30,8 @@ def listify(x):
         x = [[k] for k in x]
     return x
 
-# get a single numeric from string
 def get_single_index(inp):
+    """ get a single numeric from input"""
     res = None
     try:
         res = int(inp)
@@ -50,7 +68,7 @@ def matches(partial, full):
     return (partial == full or full.startswith(partial))
 
 
-def to_namedtuple(conf_dict, ntname):
+def to_namedtuple(conf_dict, ntname="xxx"):
     keys = sorted(conf_dict.keys())
     conf = namedtuple(ntname, keys)(*[conf_dict[k] for k in keys])
     return conf

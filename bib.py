@@ -3,10 +3,10 @@ import argparse
 import clipboard
 
 import visual
-from config import get_conf_filepath, get_config, update_config
+from config import Config
 from reader import Reader
 from runner import Runner
-from utils import paste, to_namedtuple
+from utils import paste
 from writer import Writer
 
 # abstract for gui.
@@ -52,11 +52,12 @@ def merge(conf, vis, merge_args, string_data=None):
 
 
 def main():
+    conf = Config()
     help_str = ['Bibtex file explorer.'] + \
-        ["Configuration file at {}\n".format(get_conf_filepath())]
+        ["Configuration file at {}\n".format(conf.get_filepath())]
 
     # read bib database configuration
-    conf_dict = get_config()
+    conf_dict = conf.get()
 
     # args
     parser = argparse.ArgumentParser(description="\n".join(help_str))
@@ -69,7 +70,8 @@ def main():
     if parser_args.ui is not None:
         conf_dict["visual"] = parser_args.ui
 
-    conf = to_namedtuple(conf_dict, "conf")
+    conf.update_dict(conf_dict)
+
     vis = visual.instantiator.setup(conf)
     runner, input_cmd = None, None
 
@@ -101,9 +103,6 @@ def main():
     if runner is None:
         runner = Runner(conf)
     runner.loop(input_cmd=input_cmd)
-    if runner.do_update_config:
-        update_config(runner.get_config_update())
-
 
 if __name__ == '__main__':
     main()

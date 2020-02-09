@@ -17,7 +17,6 @@ class ScihubGetter(BaseGetter):
         return []
 
     def search_pdf(self, entry_title, entry_year):
-        import ipdb; ipdb.set_trace()
         # get DOI
         self.visual.log("Looking for entry DOI...")
         doi = self.doi_getter.get_doi(entry_title + " " + entry_year)

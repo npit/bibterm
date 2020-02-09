@@ -7,18 +7,16 @@ from getters.scihub import ScihubGetter
 
 class GetterFactory:
 
+    classes = BibsonomyGetter, gScholarGetter, ScholarGetter, ScholarlyGetter, ScihubGetter
+
+    @staticmethod
+    def get_names():
+        return [x.name for x in GetterFactory.classes]
     @staticmethod
     def get_instance(name, visual):
-        if name == BibsonomyGetter.name:
-            return BibsonomyGetter(visual)
-        elif name == ScholarlyGetter.name:
-            return ScholarlyGetter(visual)
-        elif name == gScholarGetter.name:
-            return gScholarGetter(visual)
-        elif name == ScholarGetter.name:
-            return ScholarGetter(visual)
-        elif name == ScihubGetter.name:
-            return ScihubGetter(visual)
+        for cls in GetterFactory.classes:
+            if name == cls.name:
+                return cls(visual)
         else:
             visual.error("Undefined bibtex / pdf getter: {}".format(name))
             return None

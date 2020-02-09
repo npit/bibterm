@@ -15,9 +15,14 @@ class ScholarGetter(BaseGetter):
         self.browser = params
 
 
-    def search_pdf(self, entry_title):
+    def search_pdf(self, entry_title, entry_year):
         url = self.get_url(entry_title)
-        subprocess.run([self.browser, url])
+        try:
+            subprocess.run([self.browser, url])
+        except Exception as ex:
+            self.visual.error(ex)
+            return None
+
         web_pdf_path = None
         while True:
             self.visual.pause("Copy web pdf path and press enter to continue")

@@ -1,3 +1,6 @@
+from os.path import join
+from shutil import copyfile
+
 import bibtexparser
 
 import utils
@@ -15,7 +18,7 @@ class Writer:
         self.conf = conf
         self.visual = setup(conf)
         try:
-            self.bib_path = conf.user_settings["bib_path"]
+            self.bib_path = conf.get_user_settings()["bib_path"]
         except KeyError:
             self.visual.fatal_error("No bib path defined in the user settings!")
 
@@ -74,8 +77,15 @@ class Writer:
 
     def write(self, entry_collection):
         self.visual.log("Writing {} items to {}".format(len(entry_collection.bibtex_db.entries), self.bib_path))
-        with open(self.bib_path, "w") as f:
-            bibtexparser.dump(entry_collection.get_writable_db(), f)
+        # first backup to a temporary file
+        tmp_path = join(self.conf.get_tmp_dir(), "library.backup.bib")
+        copyfile(self.bib_path, tmp_path)
+        try:
+            with open(self.bib_path, "w") as f:
+                bibtexparser.dump(entry_collection.get_writable_db(), f)
+        except:
+            self.visual.error("Failed to update library file. Restoring previous version.")
+            copyfile(tmp_path, self.bib_path)
 
     def write_confirm(self, entry_collection):
         what = self.visual.yes_no("Proceed to write?")
