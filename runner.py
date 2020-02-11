@@ -29,6 +29,7 @@ class Runner:
 
         # assignments
         self.searcher = None
+        self.getter = None
         self.editor = None
         self.cached_selection = None
         self.has_stored_input = False
@@ -311,7 +312,7 @@ class Runner:
         """Print contents of the entries in the input"""
         nums = self.selector.select_by_index(inp)
         if not nums:
-            self.visual.error("No selection to show.")
+            # self.visual.error("No selection parsed to show.")
             return
         ids = [self.reference_entry_id_list[n] for n in nums]
         # self.visual.print("Entry #[{}]".format(ones_idx))

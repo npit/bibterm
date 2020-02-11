@@ -77,7 +77,7 @@ def to_namedtuple(conf_dict, ntname="xxx"):
 def is_index_list(inp):
     """Determine if the input has only slicable numeric list elements
     """
-    return all([x in [" ", ":"] or x.isdigit() for x in inp])
+    return all([x in [" ", ":", "-"] or x.isdigit() for x in inp])
 
 
 def is_valid_index_list(inp):
@@ -89,55 +89,70 @@ def is_valid_index_list(inp):
             return False
     return True
 
+def str_to_int(inp, default=None):
+    """Cast string to integer"""
+    try:
+        return int(inp)
+    except ValueError:
+        return default
+
+def handle_negative_index(idx, total):
+    """Handle negative-valued indexes"""
+    if idx is not None and idx < 0:
+        idx = total + idx
+    return idx
 
 def get_index_list(inp, total_index_num, allow_slicing=True):
     """Convert a string slicable numeric list to list of integers
     """
 
-    idxs = []
-    # allow pythonic slicing
-    if allow_slicing and ":" in inp:
-        # make sure it's whitespace surrounded
-        inp = inp.replace(":", " : ")
+    if type(inp) is str:
+        # split to digit list
         inp = inp.strip().split()
-        res = []
-        if not is_valid_index_list(inp):
-            return None
-        for i, x in enumerate(inp):
-            if x == ":":
-                if i == 0:
-                    prev_element = 1
-                    next_element = int(inp[i + 1])
-                elif i == len(inp) - 1:
-                    prev_element = int(inp[i - 1])
-                    next_element = total_index_num
-                else:
-                    prev_element = int(inp[i - 1])
-                    next_element = int(inp[i + 1])
+        # if negative indexes exist, wrap-around and convert to regular ones
+        i = 0
+        idxs = []
+        for i, num in enumerate(inp):
+            if ":" in num:
+                # allow pythonic slicing
+                try:
+                    start, end = num.split(":")
+                except ValueError:
+                    # only two-operand slices allowed
+                    return None
+                start, end = str_to_int(start), str_to_int(end)
+                if start is None and end is None:
+                    return None
 
-                if next_element > total_index_num:
-                    next_element = total_index_num
-
-                # beginning of sequence
-                res.extend(map(str, range(prev_element, next_element + 1)))
-        inp = res
-
-    if type(inp) == str:
-        inp = inp.strip().split()
-    for x in inp:
-        x = str_to_int(x)
-        if x is None:
-            return None
-        idxs.append(x)
+                start = handle_negative_index(start, total_index_num)
+                end = handle_negative_index(end, total_index_num)
+                slice_idxs = expand_slice(start, end, total_index_num)
+                idxs.extend(slice_idxs)
+            else:
+                try:
+                    num = int(num)
+                except ValueError:
+                    return None
+                num = handle_negative_index(num, total_index_num)
+                idxs.append(num)
+        else:
+            idxs = [handle_negative_index(i, total_index_num) for i in idxs]
     return idxs
 
 
-def str_to_int(inp, default=None):
-    try:
-        return int(inp)
-    except:
-        return default
-
+def expand_slice(start, end, total):
+    """Generate sequence of idxs by slice operands"""
+    if end is None:
+        return list(range(start, total))
+    if start is None:
+        return list(range(0, end + 1))
+    if start == end:
+        return [start]
+    if start < end:
+        return list(range(start, end + 1))
+    if start > end:
+        return expand_slice(start, None, total) + expand_slice(0, end, total)
+    return None
 
 def has_none(inp):
     return inp is None or any([x is None for x in inp])

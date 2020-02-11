@@ -454,7 +454,10 @@ class Entry:
         return e
 
     def get_value(self, key, postproc=False):
-        value = self.raw_dict[key]
+        try:
+            value = self.raw_dict[key]
+        except KeyError:
+            value = ""
         if postproc:
             if type(value) is list:
                 value = ",".join([str(x) for x in value])
