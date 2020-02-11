@@ -16,12 +16,15 @@ class CommandParser:
 
         self.commands_buffer = []
 
-        self.stored_input = None
-        self.has_stored_input = False
         self.visual = visual
+        self.archive_blacklist = []
 
         # placeholder to denote index list input
         self.placeholder_index_list_id = "indexes"
+
+    def prevent_archiving(self, cmd):
+        """Update list of not-to-be-archived commands"""
+        self.archive_blacklist.append(cmd)
 
     def delineate(self, input_str):
         """Break up input string into multiple commands
@@ -90,7 +93,8 @@ class CommandParser:
         while True:
             if self.commands_buffer:
                 cmd, arg = self.commands_buffer.pop()
-                self.last_cmd_arg = cmd, arg
+                if cmd not in self.archive_blacklist:
+                    self.last_cmd_arg = cmd, arg
                 return cmd, arg
             self.visual.idle()
             if initial_input is not None:
@@ -100,10 +104,10 @@ class CommandParser:
                 input_str = self.visual.receive_command()
             self.parse(input_str)
 
-    def get_last_command(self):
+    def repeat_last(self):
         """Fetches lastly executed command-argument pair
 
         :returns:  The lastly executed command-argument pair
         :rtype: Tuple of str
         """
-        return self.last_cmd_arg
+        self.commands_buffer.append(self.last_cmd_arg)

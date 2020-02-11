@@ -25,7 +25,7 @@ class Io:
 
     def __init__(self, conf):
         self.do_debug = conf.get_debug()
-        self.handles_max_results = True
+        self.handles_max_results = False
         self.conf = conf
 
     @staticmethod
@@ -269,16 +269,6 @@ class Io:
             # get column data
             col_data = [x.get_value(col, postproc=True) for x in entries]
             data.append(col_data)
-            # col_maxlen = max([len(x) for x in col_data])
-
-        # maxlen_id = max([len(x.ID) for x in entries])
-        # maxlen_title = max([len(x.title) for x in entries])
-        # maxlens = len(entries), maxlen_id, maxlen_title
-
-        # enum_str_list = []
-        # for i, entry in enumerate(entries):
-        #     st = self.gen_entry_strings(entry, maxlens)
-        #     enum_str_list.append(self.gen_entry_strings(entry, maxlens))
         data = list(zip(*data))
         return data
 

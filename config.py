@@ -19,6 +19,8 @@ class Config:
     def __init__(self, conf_dict=None):
         if conf_dict is not None:
             self.conf_dict = conf_dict
+        self.user_setting_keys = ["bibtex_getter", "bibtex_getter_params", "pdf_getter", "pdf_getter_params", "pdf_dir", "visual", "tmp_dir", "bib_path", "view_columns", "sort_column", "search_result_size", "list_result_size"]
+        self.modified = False
 
     def get_controls(self):
         return self.conf_dict["controls"]
@@ -41,6 +43,21 @@ class Config:
     def get_default_view_columns(self):
         return ["ID", "title"]
 
+    def get_default_sort_column(self):
+        return "ID"
+
+    def get_search_result_size(self):
+        try:
+            return self.get_user_settings()["search_result_size"]
+        except KeyError:
+            return 10
+
+    def get_list_result_size(self):
+        try:
+            return self.get_user_settings()["list_result_size"]
+        except KeyError:
+            return 30
+
     def get_pdf_dir(self):
         pdir = self.get_user_settings()["pdf_dir"]
         if pdir is None:
@@ -57,6 +74,24 @@ class Config:
             backup.restore()
             return False, str(ex)
 
+    def save_if_modified(self, verify_write=True, called_explicitely=True):
+        # collection
+        modified_status = "*has been modified*" if self.modified else "has not been modified"
+        if verify_write:
+            # for explicit calls, do not ask for verification
+            if called_explicitely:
+                pass
+            else:
+                # if auto-called and not modified, do nothing
+                if not self.modified:
+                    return
+                # else verify
+                if not self.visual.yes_no("The configuration {}. Overwrite?".format(modified_status), default_yes=False):
+                    return
+        # write
+        self.write(self.get())
+
+
     def validate_setting(self, key, value):
         """Validate setting values"""
         valid, msg = True, "OK"
@@ -71,17 +106,30 @@ class Config:
             if invalids:
                 valid = False
                 msg = f"Invalid column(s) set: {invalids}. Available ones are {Entry.useful_keys}"
+        elif key == "sort_column":
+            if value not in Entry.useful_keys:
+                valid = False
+                msg = f"Invalid sort column set: {value}. Available ones are {Entry.useful_keys}"
+        elif key in ["search_result_size", "list_result_size"]:
+            try:
+                value = int(value)
+                if value <= 0:
+                    raise ValueError
+            except ValueError:
+                msg = f"Search / list result size has to be an integer"
+                valid = False
+        else:
+            import ipdb; ipdb.set_trace()
         return key, value, valid, msg
 
     def update_user_setting(self, key, value):
-        if key not in self.get_user_settings().keys():
+        if key not in self.user_setting_keys:
             return False, f"Undefined user setting {key}"
         key, value, valid, errmsg = self.validate_setting(key, value)
         if not valid:
             return False, errmsg
         config = self.get()
         config["user_settings"][key] = value
-        return self.write(config)
 
     # configuration file path
     def get_filepath(self):
@@ -135,7 +183,6 @@ class Config:
             "history_back": "hb",
             "history_log": "hl",
             "history_forward": "hf",
-            "truncate": "tr",
             "settings": "se",
             "tag": "ta"
         }
@@ -156,13 +203,18 @@ class Config:
 
         # fill in key-value pairs like the example config belowbelow
         """
-        "user_settings":{
-            "bibtex_getter": "bibsonomy",
-            "bibtex_getter_params": ["username", "api_key"],
-            "pdf_getter": "scihub",
-            "bib_path": "/home/myusername/papers/library.bib",
-            "browser": "firefox"
-        }
+            "user_settings": {
+                "bibtex_getter": "bibsonomy",
+                "bibtex_getter_params": ["username", "passwd"],
+                "pdf_getter": "scholar",
+                "pdf_getter_params": "firefox",
+                "pdf_dir": "/path/to/my/pdfs",
+                "visual": "ttables",
+                "tmp_dir": "/tmp/bib",
+                "bib_path": "/path/to/library.bib",
+                "view_columns": ["ID", "author", "title", "inserted"],
+                "sort_column": "ID"
+            },
         """
         conf["user_settings"] = {}
 

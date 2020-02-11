@@ -16,9 +16,6 @@ from visual.instantiator import setup
 
 
 class Runner:
-
-    max_search = None
-    max_list = None
     search_invoke_counter = None
     is_running = True
 
@@ -31,8 +28,8 @@ class Runner:
         self.searcher = None
         self.getter = None
         self.editor = None
+        self.sorter = None
         self.cached_selection = None
-        self.has_stored_input = False
 
         # read the bib database
         if entry_collection is None:
@@ -57,17 +54,17 @@ class Runner:
 
         # history
         self.reset_history()
-
-        # maxes list
-        # delegate handling of maximum results number to the visual component or not
-        if self.visual.handles_max_results:
-            self.max_list = 30
-            self.max_search = 10
-        else:
-            self.max_list = None
-            self.max_search = None
         self.search_invoke_counter = 0
 
+    def get_max_search(self):
+        if self.visual.handles_max_results:
+            return None
+        return self.config.get_search_result_size()
+
+    def get_max_list(self):
+        if self.visual.handles_max_results:
+            return None
+        return self.config.get_list_result_size()
 
     def test(self, kwargs):
         self.visual.log(f"Printing the func! {kwargs}")
@@ -100,14 +97,22 @@ class Runner:
         self.function_id_map[commands.show] = self.show_entries
         self.function_id_map[commands.up] = self.visual.up
         self.function_id_map[commands.down] = self.visual.down
-        self.function_id_map[commands.truncate] = self.truncate
         self.function_id_map[commands.check] = self.check
         self.function_id_map[commands.settings] = self.get_editor().edit_settings
         self.function_id_map[commands.merge] = self.merge
         self.function_id_map[commands.quit] = self.quit
         self.function_id_map[commands.debug] = self.debug
-        # selection
+        self.function_id_map[commands.repeat] = self.command_parser.repeat_last
         self.function_id_map[self.command_parser.placeholder_index_list_id] = self.show_entries
+
+        # do not archive some commands:
+        # repeat, to avoid infiniloops
+        # settings changes and screen clearing
+        # selecting and unselecting
+        self.command_parser.prevent_archiving(commands.repeat)
+        self.command_parser.prevent_archiving(commands.settings)
+        self.command_parser.prevent_archiving(commands.clear)
+        self.command_parser.prevent_archiving(commands.unselect)
 
     @ignore_arg
     def clear(self):
@@ -158,7 +163,7 @@ class Runner:
 
         results_ids = sorted(zip(results_ids, match_scores), key=lambda x: x[1], reverse=True)
         # apply max search results filtering
-        results_ids = results_ids[:self.max_search]
+        results_ids = results_ids[:self.get_max_search()]
         results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
 
         self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
@@ -376,18 +381,6 @@ class Runner:
         """Enter debug mode"""
         import ipdb; ipdb.set_trace()
 
-    def truncate(self, arg):
-        """Limit the number of displayed results"""
-        # limit the number of results
-        num = utils.get_single_index(arg)
-        if not num:
-            self.visual.error("Need number argument to apply result list truncation.")
-            return
-        self.max_search = num
-        self.max_list = num
-        # repeat last command, if applicable
-        self.command_parser.backtrack()
-
     def list(self, arg=None):
         """List entries summary"""
 
@@ -401,7 +394,7 @@ class Runner:
         else:
             show_list = self.reference_entry_id_list
         self.visual.log("Listing {} entries.".format(len(show_list)))
-        self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.max_list)
+        self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.get_max_list())
 
     def is_multivalue_key(self, filter_key):
         return filter_key in self.multivalue_keys
@@ -409,7 +402,7 @@ class Runner:
     # show entries matching a filter
     def filter(self, filter_key, filter_value, max_search=None):
         if max_search is None:
-            max_search = self.max_search
+            max_search = self.get_max_search()
         if filter_key not in self.searchable_fields:
             self.visual.warn("Must filter with a key in: {}".format(self.searchable_fields))
             return
@@ -494,7 +487,7 @@ class Runner:
     def change_history(self, new_reflist, modification_msg):
         """Change the reference list to its latest modificdation
 
-        Calling the function after a search or a truncated list, will set the reference list to the resulting entry set.
+        Calling the function after a search will set the reference list to the resulting entry set.
         """
         self.visual.log("Changed reference list to [{}], with {} items.".format(modification_msg, len(new_reflist)))
         self.push_reference_list(new_reflist, modification_msg)
@@ -648,3 +641,4 @@ class Runner:
 
         # end of loop
         self.save_if_modified(called_explicitely=False)
+        self.config.save_if_modified()

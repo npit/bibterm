@@ -28,7 +28,7 @@ class TermTables(Io):
     #     # do not limit / pad lengths
     #     return (self.ID_str(entry.ID, None), self.title_str(entry.title, len(entry.title)), self.keyword_str(entry.keywords))
 
-    def print_entries_enum(self, x_iter, entry_collection, at_most=None, print_newline=False):
+    def print_entries_enum(self, x_iter, entry_collection, at_most=None, print_newline=False, do_sort=True):
         if (self.only_debug and not self.do_debug) or not x_iter:
             return
         if not x_iter:
@@ -36,6 +36,18 @@ class TermTables(Io):
         cols = self.conf.get_user_settings()['view_columns']
         cols = self.conf.get_default_view_columns() if not cols else cols
         entries_strings = self.gen_entries_strings(x_iter, cols)
+
+        if do_sort:
+            scol = None
+            try:
+                scol = self.conf.get_user_settings()['sort_column']
+            except KeyError:
+                pass
+            scol = self.conf.get_default_sort_column() if not scol else scol
+            scol = cols[0] if scol not in cols else scol
+
+            scol_idx = cols.index(scol)
+            entries_strings = sorted(entries_strings, key=lambda x: x[scol_idx])
 
         self.print_enum(entries_strings, at_most=at_most, additionals=None, header=cols, preserve_col_idx=[0])
         if print_newline:

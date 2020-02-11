@@ -99,13 +99,12 @@ def str_to_int(inp, default=None):
 def handle_negative_index(idx, total):
     """Handle negative-valued indexes"""
     if idx is not None and idx < 0:
-        idx = total + idx
+        idx = total + idx + 1
     return idx
 
 def get_index_list(inp, total_index_num, allow_slicing=True):
     """Convert a string slicable numeric list to list of integers
     """
-
     if type(inp) is str:
         # split to digit list
         inp = inp.strip().split()

@@ -21,10 +21,20 @@ class Editor:
     @ignore_arg
     def edit_settings(self):
         """Function to edit program user settings"""
-        curr_settings = list(self.config.get_user_settings().items())
-        selected, _ = self.visual.user_multifilter(curr_settings, "setting value".split(), message="Select setting to update")
+        curr_settings = self.config.get_user_settings()
+        selected, _ = self.visual.user_multifilter(list(curr_settings.items()), "setting value".split(), message="Select setting to update")
         if not selected:
+            if self.visual.yes_no("Add a new setting?", default_yes=False):
+                self.visual.message(f"Available keys are: {self.config.user_setting_keys}")
+                key = self.visual.ask_user("Enter key").strip()
+                if key in curr_settings.keys():
+                    if not self.visual.yes_no(f"That key exists -- replace existing value: {curr_settings[key]} ?"):
+                        self.visual.message("Aborting")
+                        return
+                value = self.visual.ask_user("Enter value").strip()
+                self.config.update_user_setting(key, value)
             return
+
         for key, old_value in selected:
             new_value = self.visual.ask_user(f"Enter new value for setting: [{key}]")
             status, error_msg = self.config.update_user_setting(key, new_value)
