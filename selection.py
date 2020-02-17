@@ -39,6 +39,10 @@ class Selector:
         entry_index = self.entry_id_list.index(inp)
         return self.select_by_index(entry_index, yield_ones_index=yield_ones_index, parse_ones_index=False)
 
+    def correct_for_sorting(self):
+        """Adjust selections to the correct reference, if they were made via a sorted enumeration"""
+        self.cached_selection = [self.visual.sorting_index[s] for s in self.cached_selection]
+
     def select_by_index(self, inp, yield_ones_index=False, parse_ones_index=True):
         """Select item(s) from the entry list by numeric index
 
@@ -60,6 +64,10 @@ class Selector:
             self.visual.error("Invalid index(es): {}".format([orig_idxs[i] for i in invalids]))
         idxs = [idxs[i] for i in range(len(idxs)) if i not in invalids]
         self.cached_selection = idxs
+
+        # correct for selections on a sorted list
+        self.correct_for_sorting()
+
         return self.get_selection(yield_ones_index)
 
     def get_selection(self, yield_ones_index=False):

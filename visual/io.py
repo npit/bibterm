@@ -19,6 +19,7 @@ class Io:
     search_time_delta = 0
 
     log_history = []
+    sorting_index = []
 
     def set_only_debug(self, val):
         self.only_debug = val
@@ -27,6 +28,7 @@ class Io:
         self.do_debug = conf.get_debug()
         self.handles_max_results = False
         self.conf = conf
+        self.sorting_index = []
 
     @staticmethod
     def get_instance(conf=None):
@@ -38,6 +40,11 @@ class Io:
         print("Instantiating the {} ui".format(Io.name))
         Io.instance = Io(conf)
         return Io.instance
+
+    def update_sorting_index(self, idxs):
+        """Update container with sorted index positions"""
+        self.sorting_index.clear()
+        self.sorting_index.extend(idxs)
 
     def clear(self):
         for _ in range(self.clear_size):

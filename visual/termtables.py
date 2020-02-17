@@ -33,21 +33,18 @@ class TermTables(Io):
             return
         if not x_iter:
             return
-        cols = self.conf.get_user_settings()['view_columns']
-        cols = self.conf.get_default_view_columns() if not cols else cols
+        cols = self.conf.get_view_columns()
         entries_strings = self.gen_entries_strings(x_iter, cols)
 
         if do_sort:
-            scol = None
-            try:
-                scol = self.conf.get_user_settings()['sort_column']
-            except KeyError:
-                pass
-            scol = self.conf.get_default_sort_column() if not scol else scol
-            scol = cols[0] if scol not in cols else scol
-
+            scol = self.conf.get_sort_column()
             scol_idx = cols.index(scol)
-            entries_strings = sorted(entries_strings, key=lambda x: x[scol_idx])
+            entries_strings_idxs = list(enumerate(entries_strings))
+            entries_strings_idxs = sorted(entries_strings_idxs, key=lambda x: x[1][scol_idx])
+            idxs, entries_strings = zip(*entries_strings_idxs)
+        else:
+            idxs = list(range(len(entries_strings)))
+        self.update_sorting_index(idxs)
 
         self.print_enum(entries_strings, at_most=at_most, additionals=None, header=cols, preserve_col_idx=[0])
         if print_newline:

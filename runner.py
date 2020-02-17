@@ -166,7 +166,7 @@ class Runner:
         results_ids = results_ids[:self.get_max_search()]
         results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
 
-        self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection)
+        self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection, do_sort=False)
         return results_ids
 
     def get_bibtex(self, arg=None):

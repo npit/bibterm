@@ -25,6 +25,22 @@ class Config:
     def get_controls(self):
         return self.conf_dict["controls"]
 
+    def get_view_columns(self):
+        cols = self.get_user_settings()['view_columns']
+        cols = self.get_default_view_columns() if not cols else cols
+        return cols
+
+    def get_sort_column(self):
+        cols = self.get_view_columns()
+        scol = None
+        try:
+            scol = self.get_user_settings()['sort_column']
+        except KeyError:
+            pass
+        scol = self.get_default_sort_column() if not scol else scol
+        scol = cols[0] if scol not in cols else scol
+        return scol
+
     def update_dict(self, ddict):
         self.conf_dict = ddict
 
@@ -123,6 +139,7 @@ class Config:
         return key, value, valid, msg
 
     def update_user_setting(self, key, value):
+        """Function to update a key-value user-level setting"""
         if key not in self.user_setting_keys:
             return False, f"Undefined user setting {key}"
         key, value, valid, errmsg = self.validate_setting(key, value)
@@ -130,6 +147,11 @@ class Config:
             return False, errmsg
         config = self.get()
         config["user_settings"][key] = value
+
+    def update_setting(self, key, value):
+        """Function to update a program-level key-value setting"""
+        config = self.get()
+        config[key] = value
 
     # configuration file path
     def get_filepath(self):

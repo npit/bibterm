@@ -66,11 +66,18 @@ def main():
     parser.add_argument("-u", "--ui", dest="ui", help="Override user interface type.")
     parser_args = parser.parse_args()
 
-    conf_dict["debug"] = parser_args.debug
-    if parser_args.ui is not None:
-        conf_dict["visual"] = parser_args.ui
+    for arg in vars(parser_args):
+        value = getattr(parser_args, arg)
+        if arg in conf.user_setting_keys: 
+            conf.update_user_setting(arg, value)
+        else:
+            conf.update_setting(arg, value)
+    # conf_dict["debug"] = parser_args.debug
+    # if parser_args.ui is not None:
+    #     conf.update_setting(parser_args.ui)
+    #     conf_dict["visual"] = parser_args.ui
 
-    conf.update_dict(conf_dict)
+    # conf.update_dict(conf_dict)
 
     vis = visual.instantiator.setup(conf)
     runner, input_cmd = None, None
