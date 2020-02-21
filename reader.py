@@ -153,19 +153,12 @@ class EntryCollection:
         for nkw in new_kws:
             self.add_keyword_instance(nkw, entry_id)
 
-    def handle_keywords(self, ent, index_id):
-        """Apply corrections to an entry's keywords"""
+    def process_keywords(self, keywords_orig, index_id):
+        """Process an entity's keywords"""
         applied_changes = False
-        if ent.keywords is None:
-            ent.keywords = []
-            return ent, False
-        keywords = []
-        keywords_final = []
-        for raw_kw in ent.keywords:
-            kw = raw_kw.lower()
-            # replace spaces with dashes
-            kw = re.sub("[ ]+", "-", kw)
-            kw = re.sub('[^a-zA-Z-]+', '', kw)
+        keywords, keywords_final = [], []
+        for raw_kw in keywords_orig:
+            kw = self.process_keyword(raw_kw)
             if not kw:
                 continue
             if kw != raw_kw:
@@ -187,18 +180,37 @@ class EntryCollection:
                 keywords_final.append(kw)
                 continue
             keywords.append(kw)
+        return keywords, keywords_final, applied_changes
 
+    def process_keyword(self, kw):
+        """Process a single keyword element"""
+        kw = kw.lower()
+        # replace spaces with dashes
+        kw = re.sub("[ ]+", "-", kw)
+        kw = re.sub('[^a-zA-Z-]+', '', kw)
+        return kw
+
+    def handle_keywords(self, ent, index_id):
+        """Apply corrections to an entry's keywords"""
+        if ent.keywords is None:
+            ent.keywords = []
+            return ent, False
+
+        keywords, keywords_final, applied_changes = self.process_keywords(ent.keywords, index_id)
+
+        # ask the user to approve the changes
         while keywords:
-            self.visual.print_enum(keywords)
+            self.visual.print_enum(keywords, header=["keyword"])
             if self.keyword_override_action is None:
-                what = self.visual.ask_user("Process keywords for entry [{}] ".format(index_id),
-                                         "Keep-all Discard-all *keep discard change #1 #2 #... #|  #*all ", check=False)
+                # get user input
+                what = self.visual.ask_user(f"Process keywords for entry [{index_id}] ", "*keep discard change #<indexes> #| #*all ", do_check=False)
                 cmd, *idx_args = what.strip().split()
-                idx_list = [i - 1 for i in utils.get_index_list(idx_args, len(keywords))]
-                if not idx_list:
+                if not idx_args:
+                    # fetch all
                     idx_list = range(len(keywords))
-                elif utils.matches(cmd, 'all'):
-                    idx_list = range(len(keywords))
+                    self.keyword_override_action = cmd
+                else:
+                    idx_list = [i - 1 for i in utils.get_index_list(idx_args, len(keywords))]
             else:
                 self.visual.log("Applying action to all entries & keywords: {}".format(self.keyword_override_action))
                 cmd, idx_list = self.keyword_override_action, range(len(keywords))
@@ -217,16 +229,9 @@ class EntryCollection:
                 keywords_final.extend(new_kws)
             elif utils.matches(cmd, "discard"):
                 applied_changes = True
-            elif utils.matches(cmd, "Keep-all"):
-                # apply the action
-                self.keyword_override_action = "keep"
-                continue
-            elif utils.matches(cmd, "Discard-all"):
-                # apply the action
-                self.keyword_override_action = "discard"
-                continue
             else:
                 self.visual.error("Invalid input.")
+                self.keyword_override_action = None
                 continue
             # remove used up indexes
             keywords = [keywords[i] for i in range(len(keywords)) if i not in idx_list]

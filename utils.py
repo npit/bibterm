@@ -102,40 +102,60 @@ def handle_negative_index(idx, total):
         idx = total + idx + 1
     return idx
 
+def parse_slice(num, total_index_num):
+    """Parse a string representing pythonic index slicing"""
+    # allow pythonic slicing
+    try:
+        start, end = num.split(":")
+    except ValueError:
+        # only two-operand slices allowed
+        return None
+    start, end = str_to_int(start), str_to_int(end)
+    if start is None and end is None:
+        return None
+
+    start = handle_negative_index(start, total_index_num)
+    end = handle_negative_index(end, total_index_num)
+    slice_idxs = expand_slice(start, end, total_index_num)
+    return slice_idxs
+
+
+def handle_string_index(num, total_index_num):
+    """Function to map a string representation of indexes to list of ints"""
+
+    # cast to integer
+    try:
+        num = int(num)
+        # return a list to mantain uniform return type with potential slices
+        return [handle_negative_index(num, total_index_num)]
+    except ValueError:
+        # attempt to parse a slice
+        if ":" in num:
+            return parse_slice(num)
+        else:
+            # invalid string
+            return None
+    return None
+
+
 def get_index_list(inp, total_index_num, allow_slicing=True):
     """Convert a string slicable numeric list to list of integers
     """
     if type(inp) is str:
-        # split to digit list
+        # split to string list
         inp = inp.strip().split()
-        # if negative indexes exist, wrap-around and convert to regular ones
-        i = 0
-        idxs = []
-        for i, num in enumerate(inp):
-            if ":" in num:
-                # allow pythonic slicing
-                try:
-                    start, end = num.split(":")
-                except ValueError:
-                    # only two-operand slices allowed
-                    return None
-                start, end = str_to_int(start), str_to_int(end)
-                if start is None and end is None:
-                    return None
-
-                start = handle_negative_index(start, total_index_num)
-                end = handle_negative_index(end, total_index_num)
-                slice_idxs = expand_slice(start, end, total_index_num)
-                idxs.extend(slice_idxs)
-            else:
-                try:
-                    num = int(num)
-                except ValueError:
-                    return None
-                num = handle_negative_index(num, total_index_num)
-                idxs.append(num)
+    idxs = []
+    for i, num in enumerate(inp):
+        if type(num) is str:
+            # parse string representation of indexes / slice ranges
+            cur_idx = handle_string_index(num, total_index_num)
+            if cur_idx is None:
+                # non-parsable item encountered
+                return None
+            idxs.extend(cur_idx)
         else:
-            idxs = [handle_negative_index(i, total_index_num) for i in idxs]
+            # numeric
+            idxs.append(handle_negative_index(num, total_index_num))
     return idxs
 
 

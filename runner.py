@@ -247,7 +247,7 @@ class Runner:
                 if self.visual.yes_no("Search for pdf on the web?"):
                     self.search_web_pdf()
 
-    def tag(self, arg):
+    def tag(self, arg=None):
         """Add tag to an entry"""
         nums = self.selector.select_by_index(arg)
         if nums is None or not nums:
@@ -385,14 +385,20 @@ class Runner:
         """List entries summary"""
 
         show_list = self.reference_entry_id_list
-        nums = self.selector.select_by_index(arg)
-        if nums:
+        nums = self.selector.select_by_index(arg, default_to_reference=True)
+        if nums is None:
+            # selection error
+            return
+        show_list = self.reference_entry_id_list
+        if len(nums) > 0:
+            # some indexes were selected
             show_list = [self.reference_entry_id_list[n] for n in nums]
             if show_list != self.reference_entry_id_list and arg is not None:
                 # arguments specified directly; push the history change
-                self.change_history(show_list, "{} {}".format(self.commands.list, len(show_list)))
+                self.change_history(show_list, "{} {}".format("list", len(show_list)))
         else:
-            show_list = self.reference_entry_id_list
+            # empty index list: show the entire reference
+            pass
         self.visual.log("Listing {} entries.".format(len(show_list)))
         self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.get_max_list())
 

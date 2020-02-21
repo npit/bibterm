@@ -23,13 +23,13 @@ class Getter:
 
     def configure(self):
         try:
-            self.browser = self.config.get_user_setting["browser"]
+            self.browser = self.config.get_user_setting("browser")
         except KeyError:
             pass
 
-        self.pdf_apis = self.config.pdf_apis
-        self.bibtex_apis = self.config.bibtex_apis
-        self.num_retrieved_bibtex = self.config.num_retrieved_bibtex
+        self.pdf_apis = self.config.get_pdf_apis()
+        self.bibtex_apis = self.config.get_bibtex_apis()
+        self.num_retrieved_bibtex = self.config.get_num_retrieved_bibtex()
 
         # instantiate user selections
         self.instantiate_selected_apis()
@@ -41,14 +41,14 @@ class Getter:
 
     def instantiate_selected_apis(self):
         try:
-            name, params = self.config.get_user_setting["pdf_getter"], self.config.get_user_setting["pdf_getter_params"]
+            name, params = self.config.get_user_setting("pdf_getter"), self.config.get_user_setting("pdf_getter_params")
             self.pdf_api = self.instantiate_api(name, params)
         except KeyError:
             pass
         except Exception:
             self.visual.error("Failed to instantiate {} pdf api with supplied params {}.".format(name, params))
         try:
-            name, params = self.config.get_user_setting["bibtex_getter"], self.config.get_user_setting["bibtex_getter_params"]
+            name, params = self.config.get_user_setting("bibtex_getter"), self.config.get_user_setting("bibtex_getter_params")
             self.bibtex_api = self.instantiate_api(name, params)
         except KeyError:
             pass

@@ -41,9 +41,12 @@ class Io:
         Io.instance = Io(conf)
         return Io.instance
 
+    def reset_sorting_index(self):
+        self.sorting_index.clear()
+
     def update_sorting_index(self, idxs):
         """Update container with sorted index positions"""
-        self.sorting_index.clear()
+        self.reset_sorting_index()
         self.sorting_index.extend(idxs)
 
     def clear(self):
@@ -144,7 +147,7 @@ class Io:
         return msg, opts, opt_print, opt_selection, default_option_idx
 
     # func to show choices. Bang options are explicit and are not edited
-    def ask_user(self, msg="", options_str=None, check=True, multichar=True, return_match=True):
+    def ask_user(self, msg="", options_str=None, do_check=True, multichar=True, return_match=True):
         options_str = " ".join(options_str) if type(options_str) == list else options_str
         msg, opts, opt_print, opt_selection, default_option_idx = self.generate_user_responses(msg, options_str)
         while True:
@@ -153,8 +156,8 @@ class Io:
                 # default option on empty input
                 if not ans and default_option_idx is not None:
                     return opts[default_option_idx]
-                # loop on invalid input, if check
-                if check:
+                # loop on invalid input, if check flag is on
+                if do_check:
                     # no exact match on full or required option lengths
                     if not any([ans == x for x in opt_selection + opts]):
                         self.print("Valid options are: " + opt_print)

@@ -25,8 +25,17 @@ class Config:
     def get_controls(self):
         return self.conf_dict["controls"]
 
+    def get_pdf_apis(self):
+        self.get()["pdf_apis"]
+
+    def get_bibtex_apis(self):
+        self.get()["bibtex_apis"]
+
+    def get_num_retrieved_bibtex(self):
+        self.get()["num_retrieved_bibtex"]
+
     def get_view_columns(self):
-        cols = self.get_user_settings()['view_columns']
+        cols = self.get_user_setting('view_columns')
         cols = self.get_default_view_columns() if not cols else cols
         return cols
 
@@ -34,7 +43,7 @@ class Config:
         cols = self.get_view_columns()
         scol = None
         try:
-            scol = self.get_user_settings()['sort_column']
+            scol = self.get_user_setting('sort_column')
         except KeyError:
             pass
         scol = self.get_default_sort_column() if not scol else scol
@@ -47,11 +56,17 @@ class Config:
     def get_user_settings(self):
         return self.conf_dict["user_settings"]
 
+    def get_user_setting(self, key):
+        try:
+            return self.get_user_settings()[key]
+        except KeyError:
+            return None
+
     def get_debug(self):
         return self.get()["debug"]
 
     def get_visual(self):
-        return self.get_user_settings()["visual"]
+        return self.get_user_setting("visual")
 
     def get_tmp_dir(self):
         return self.get_user_settings()["tmp_dir"]
@@ -135,6 +150,7 @@ class Config:
                 msg = f"Search / list result size has to be an integer"
                 valid = False
         else:
+            # ???
             import ipdb; ipdb.set_trace()
         return key, value, valid, msg
 
@@ -147,6 +163,7 @@ class Config:
             return False, errmsg
         config = self.get()
         config["user_settings"][key] = value
+        return True, ""
 
     def update_setting(self, key, value):
         """Function to update a program-level key-value setting"""
