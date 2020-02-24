@@ -127,12 +127,17 @@ class Runner:
         if len(rdr.get_entry_collection().entries) == 0:
             self.visual.error("Zero items extracted from the collection to merge.")
             return
+        import ipdb; ipdb.set_trace()
         eids = []
         for entry in rdr.get_entry_collection().entries.values():
             self.entry_collection.add_new_entry(entry)
             eids.append(entry.ID)
+        self.selector.update_reference(self.reference_entry_id_list)
         # select them
-        self.selector.select_by_id(eids)
+        res = self.selector.select_by_id(eids)
+        if res is None:
+            self.visual.error("Failed to select merged entry!")
+
 
     def quit(self):
         """Quitting flag-setting function"""

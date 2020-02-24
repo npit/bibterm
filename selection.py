@@ -35,10 +35,18 @@ class Selector:
         :param inp: str, String representing a selection by ID
         :return idxs: list, List of index selection to the reference
         """
-        if inp not in self.entry_id_list:
+        if type(inp) is not list:
+            inp = [inp]
+        entry_indexes = []
+        for eid in inp:
+            if eid not in self.entry_id_list:
+                continue
+            entry_indexes.append(self.entry_id_list.index(eid))
+        if not entry_indexes:
+            self.visual.error(f"Unable to match any entry id from {inp}")
             return None
-        entry_index = self.entry_id_list.index(inp)
-        return self.select_by_index(entry_index, yield_ones_index=yield_ones_index, parse_ones_index=False)
+        import ipdb; ipdb.set_trace()
+        return self.select_by_index(entry_indexes, yield_ones_index=yield_ones_index, parse_ones_index=False)
 
     def correct_for_sorting(self):
         """Adjust selections to the correct reference, if they were made via a sorted enumeration"""
@@ -71,7 +79,9 @@ class Selector:
             self.visual.log(f"Invalid selection: {inp} for a {len(self.entry_id_list)}-long reference list")
             return None
         if parse_ones_index:
-            idxs = [i-1 for i in orig_idxs]
+            idxs = [i - 1 for i in orig_idxs]
+        else:
+            idxs = orig_idxs
         invalids = [i for i in range(len(idxs)) if idxs[i] not in range(len(self.entry_id_list))]
         if invalids:
             self.visual.error("Invalid index(es): {}".format([orig_idxs[i] for i in invalids]))
