@@ -68,16 +68,13 @@ def main():
 
     for arg in vars(parser_args):
         value = getattr(parser_args, arg)
-        if arg in conf.user_setting_keys: 
-            conf.update_user_setting(arg, value)
+        if arg in conf.user_setting_keys:
+            valid, msg = conf.update_user_setting(arg, value)
+            if not valid:
+                print(msg)
+                return
         else:
             conf.update_setting(arg, value)
-    # conf_dict["debug"] = parser_args.debug
-    # if parser_args.ui is not None:
-    #     conf.update_setting(parser_args.ui)
-    #     conf_dict["visual"] = parser_args.ui
-
-    # conf.update_dict(conf_dict)
 
     vis = visual.instantiator.setup(conf)
     runner, input_cmd = None, None

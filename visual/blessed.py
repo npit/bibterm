@@ -101,8 +101,7 @@ class Blessed(TermTables):
             self.layout.data.w = self.width
             self.layout.data.h = self.layout.debug.y - 1 - self.layout.data.y
             if self.use_separator_lines:
-                self.layout.data.h -=1
-
+                self.layout.data.h -= 1
 
         self.curren_state = self.states.command
 
@@ -125,11 +124,12 @@ class Blessed(TermTables):
         self.use_buffer = False
 
         # controls
-        self.commands = conf.controls
-        self.selection_commands = conf.selection_commands
+        self.commands = conf.get_controls()
+        self.selection_commands = conf.get_selection_commands()
 
         # threading lock
         self.access_lock = threading.Lock()
+        self.has_realtime_input = True
 
     def print_to_layout(self, msg, prompt, layout, do_clear=True, max_size=None):
         if do_clear:
@@ -238,18 +238,6 @@ class Blessed(TermTables):
         # return results
         return done, self.search_cache
 
-    def get_command_full_name(self, cmd):
-        return [k for k in self.commands if self.commands[k] == cmd][0]
-
-    def match_command(self, inp):
-        candidate_commands = self.get_candidate_commands(inp)
-        exact_match = [inp == c for c in candidate_commands]
-        if any(exact_match):
-            exact_command = [candidate_commands[i] for i in range(len(exact_match)) if exact_match[i]][0]
-        else:
-            exact_command = None
-        return candidate_commands, exact_command
-
     def conditional_clear_selection(self, command):
         """Clear the selection cache on selecton-unrelated commands
         """
@@ -259,6 +247,19 @@ class Blessed(TermTables):
             self.selection_cache = ""
             self.debug("Cleared selection")
 
+    def submit_command(self, input_str, command_name):
+        """Receive a fully-fledged command"""
+        self.message(f"Executing command: {command_name}")
+        self.clear_data()
+        self.command(input_str)
+        self.message(command_name)
+
+    def submit_partial_input(self, input_str, candidate_commands):
+        """Receive a fully-fledged command"""
+        self.clear_data()
+        self.command(input_str)
+        self.message("Candidate commands: {}".format(",".join(candidate_commands)))
+
     def receive_command(self):
         x, y = self.layout.command.values()
         starting_x = 2
@@ -267,82 +268,36 @@ class Blessed(TermTables):
         info_msg = ""
 
         inp = self.selection_cache
-        while not done:
-            command = ""
-            # input
-            new_inp = self.input_multichar(starting_x, y, single_char=True, initial_entry=inp)
-            # esc
-            if new_inp is None:
-                self.selection_cache = ""
-                self.prompt_in_use = False
-                command = None
-                break
-            # enter
-            if new_inp == inp:
-                self.selection_cache = ""
-                self.prompt_in_use = False
-                command = inp
-                break
-            # del to empty
-            if not new_inp:
-                self.selection_cache = ""
-                self.prompt_in_use = False
-                break
-            inp = new_inp
 
-            self.debug("Sel. cache: [{}]".format(self.selection_cache))
+        # while not done:
+        command = ""
+        # input
+        new_inp = self.input_multichar(starting_x, y, single_char=True, initial_entry=inp)
+        # esc
+        if new_inp is None:
+            self.selection_cache = ""
+            self.prompt_in_use = False
+            command = None
+            # break
+        # enter
+        if new_inp == inp:
+            self.selection_cache = ""
+            self.prompt_in_use = False
+            command = inp
+            # break
+        # del to empty
+        if not new_inp:
+            self.selection_cache = ""
+            self.prompt_in_use = False
+            # break
+        inp = new_inp
 
-            # check for command match
-            candidate_commands, exact_command = self.match_command(inp)
-            if exact_command:
-                info_msg = "command: " + self.get_command_full_name(exact_command)
-                command = exact_command
-                # if the matched is not selection-related, clear the selection
-                # self.conditional_clear_selection(command)
-                break
+        self.debug("Sel. cache: [{}]".format(self.selection_cache))
 
-            # show possible command matches from current string
-            if candidate_commands:
-                info_msg = "<{}>".format(" ".join(candidate_commands))
-            else:
-                # no candidate commands
-                # if current string is a valid selection, update it
-                if utils.is_index_list(inp):
-                    self.prompt_in_use = True
-                    # set selection cache
-                    self.selection_cache = inp
-                    info_msg = "selection: {}".format(self.selection_cache)
-                    command = inp
-                    break
-                elif self.selection_cache:
-                    # not valid selection, but previous one was
-                    new_inp = inp[len(self.selection_cache):]
-                    # if extraneous input is a command, partial or not, show it
-                    candidate_commands, exact_command = self.match_command(new_inp)
-                    if exact_command:
-                        self.debug('Selection cmd')
-                        # apply exact command on selection
-                        info_msg = "command: " + self.get_command_full_name(exact_command)
-                        command = exact_command + " " + self.selection_cache
-                        done = True
-                    elif candidate_commands:
-                        # show partial
-                        info_msg = "<{}> {}".format(" ".join(candidate_commands), self.selection_cache)
-                        self.debug('Selection partial')
-                    else:
-                        info_msg = "Invalid selection / selection-command: {}".format(inp)
-                        self.debug('Invalid selection cmd')
-                else:
-                    # wholly invalid input: shave off that last invalid char
-                    inp = inp[:-1]
-                    #  show suggestions starting from the last  valid sequence
-                    info_msg = "Candidate commands: {}".format(" ".join(self.commands.values()))
-                    self.message(info_msg)
-
-            # show current command entry
-            self.command(inp)
-            # self.temp_print(inp, x, y)
-            self.message(info_msg)
+        # show current command entry
+        self.command(inp)
+        # self.temp_print(inp, x, y)
+        self.message(info_msg)
 
         # self.clear_prompt()
         # if self.selection_cache:
@@ -351,11 +306,6 @@ class Blessed(TermTables):
         self.clear_data()
         self.command(command)
         return command
-
-    def get_candidate_commands(self, partial_str):
-        if not partial_str:
-            return self.commands.values()
-        return [cmd for cmd in self.commands.values() if utils.matches(partial_str, cmd)]
 
     def clear_data(self):
         for line in range(self.layout.data.y, self.layout.data.y + self.layout.data.h):
@@ -406,7 +356,6 @@ class Blessed(TermTables):
             width -= 2
         return "<" + (stroke * width) + ">"
 
-
     def temp_print(self, msg, x, y, max_size=None):
         if max_size is not None:
             msg = utils.limit_size(msg, max_size)
@@ -431,24 +380,6 @@ class Blessed(TermTables):
     def newline(self):
         pass
 
-    # # printing funcs, add data clearing
-    # def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False):
-    #     self.clear_data()
-    #     with self.term.location(0, self.data_start_line):
-    #         super().print_entries_enum(x_iter, entry_collection, at_most, additional_fields, print_newline)
-
-    # def print_entries_contents(self, entries):
-    #     self.clear_data()
-    #     with self.term.location(0, self.data_start_line):
-    #         entry_contents_str = "\n".join([self.get_entry_contents(entry) for entry in entries])
-    #         self.print(entry_contents_str)
-
-    # def print_enum(self, x_iter, at_most=None, additionals=None, header=None, preserve_col_idx=None):
-    #     self.clear_data()
-    #     with self.term.location(0, self.data_start_line):
-    #         # Io.print_enum(self, x_iter, at_most, additionals)
-    #         self.print(self.enum(x_iter))
-
     def error(self, msg):
         self.message("(!) {}".format(msg))
 
@@ -462,7 +393,7 @@ class Blessed(TermTables):
     # func to show choices. Bang options are explicit and are not edited
     def ask_user(self, msg="", options_str=None, check=True, multichar=False, return_match=False):
         msg, opts, opt_print, opt_selection, default_option_idx = self.generate_user_responses(msg, options_str)
-        # self.clear_prompt()
+        self.clear_prompt()
         prompt_input_coords = self.update_prompt_symbol(msg)
         while True:
             if multichar:
@@ -492,45 +423,89 @@ class Blessed(TermTables):
             # valid or no-option input
             return ans
 
-    def input_multichar(self, x, y, single_char=False, initial_entry=None):
-        """Input function that requres termination with RET or ESC
+    def input_singlechar(self, evaluate_sequences=True, initial_entry=None):
+        """Get single-character entries
+
+        Returns:
+        res -- The entry string
+        concluded -- whether a finalizing key was pressed
         """
-        if initial_entry is not None:
-            res = initial_entry
-        else:
-            res = ""
-        done = False
-        while not done:
-            key = self.get_raw_input()
-            if self.get_metakey(key):
-                # metakey handling
-                name, func = self.get_metakey(key)
-                self.debug("Metakey: {}".format(name))
-                res += func(key)
-            elif key.is_sequence:
-                # blessed sequence key
-                if key.name == "KEY_DELETE":
-                    self.clear_line(y, x)
-                    if not res:
-                        # manage potential search_cache underflow
-                        self.search_cache_underflow = True
+        # return self.input_multichar(2, 0, single_char=True, initial_entry=initial_entry)
+        res = initial_entry if initial_entry is not None else ""
+        concluded = False
+        # get key input
+        key = self.get_raw_input()
+        if self.get_metakey(key):
+            # metakey handling
+            name, func = self.get_metakey(key)
+            self.debug("Metakey: {}".format(name))
+            res += func(key)
+        elif key.is_sequence:
+            # blessed sequence key
+            if key.name == "KEY_DELETE":
+                if len(res) > 0:
                     res = res[:-1]
-                if key.name == "KEY_ENTER":
-                    # on enter, we're done
-                    done = True
-                if key.name == "KEY_ESCAPE":
-                    # on escape, return nothing
-                    res = None
-                    done = True
-            else:
-                # regular input
-                res += key
-            # print current entry
-            # self.temp_print(res, x, y)
-            # for single-char mode, return immediately
+            if key.name == "KEY_ENTER":
+                # on enter, we're done
+                concluded = True
+            if key.name == "KEY_ESCAPE":
+                # on escape, return nothing
+                res = ""
+                concluded = True
+        else:
+            # regular input
+            res += key
+        return res, concluded
+
+    def input_multichar(self, x, y, single_char=False, initial_entry=None):
+        """Get multi-character entries, terminating with RET or ESC
+        """
+        res = initial_entry
+        while True:
+            res, concluded = self.input_singlechar(initial_entry=res)
+            self.temp_print(res, x, y)
+            if concluded:
+                break
             if single_char:
                 break
         return res
+
+        # if initial_entry is not None:
+        #     res = initial_entry
+        # else:
+        #     res = ""
+        # done = False
+        # while not done:
+        #     key = self.get_raw_input()
+        #     if self.get_metakey(key):
+        #         # metakey handling
+        #         name, func = self.get_metakey(key)
+        #         self.debug("Metakey: {}".format(name))
+        #         res += func(key)
+        #     elif key.is_sequence:
+        #         # blessed sequence key
+        #         if key.name == "KEY_DELETE":
+        #             self.clear_line(y, x)
+        #             if not res:
+        #                 # manage potential search_cache underflow
+        #                 self.search_cache_underflow = True
+        #             res = res[:-1]
+        #         if key.name == "KEY_ENTER":
+        #             # on enter, we're done
+        #             done = True
+        #         if key.name == "KEY_ESCAPE":
+        #             # on escape, return nothing
+        #             res = None
+        #             done = True
+        #     else:
+        #         # regular input
+        #         res += key
+        #     # print current entry
+        #     self.temp_print(res, x, y)
+        #     # for single-char mode, return immediately
+        #     if single_char:
+        #         break
+        # return res
 
     def up(self):
         if not self.use_buffer:

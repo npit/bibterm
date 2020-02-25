@@ -17,6 +17,7 @@ class Io:
 
     does_incremental_search = False
     search_time_delta = 0
+    has_realtime_input = False
 
     log_history = []
     sorting_index = []
@@ -187,7 +188,7 @@ class Io:
             prompt = "{}Enter numeric indexes to modify the list, q to select none, or ENTER to proceed".format(message + ". " if message is not None else "")
             idxs = None
             while True:
-                str_inp = self.ask_user(prompt)
+                str_inp = self.ask_user(prompt, multichar=True)
                 if str_inp == "q":
                     return [], []
                 idxs = utils.get_index_list(str_inp, len(cur_collection))
@@ -197,7 +198,7 @@ class Io:
                 break
             if idxs:
                 # subset was selected
-                sel = sorted(set(idxs))
+                idxs = sorted(set(idxs))
                 cur_collection = [cur_collection[i-1] for i in idxs]
                 cur_reference = [cur_reference[i-1] for i in idxs]
                 # return immediately for single-selections

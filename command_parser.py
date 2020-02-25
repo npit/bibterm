@@ -17,6 +17,10 @@ class CommandParser:
         self.commands_buffer = []
 
         self.visual = visual
+
+        self.handle_realtime_input = visual.has_realtime_input
+        self.partial_realtime_input = ""
+
         self.archive_blacklist = []
 
         # placeholder to denote index list input
@@ -90,6 +94,7 @@ class CommandParser:
         :rtype: Tuple of string
 
         """
+        input_str = ""
         while True:
             if self.commands_buffer:
                 cmd, arg = self.commands_buffer.pop()
@@ -101,8 +106,75 @@ class CommandParser:
                 input_str, initial_input = initial_input, None
                 self.visual.newline()
             else:
-                input_str = self.visual.receive_command()
+                if not self.handle_realtime_input:
+                    input_str = self.visual.receive_command()
+                else:
+                    input_str = self.partial_realtime_input
+                    while True:
+                        input_str, concluded = self.visual.input_singlechar(initial_entry=input_str)
+                        # empty input entered
+                        # import ipdb; ipdb.set_trace()
+                        valid, candidates, command_name = self.realtime_input_concluded(input_str)
+                        if valid:
+                            # a valid command is entered
+                            self.visual.submit_command(input_str, command_name)
+                            # flush partial
+                            self.partial_realtime_input = ""
+                            # break the loop to evaluate the command
+                            break
+                        elif concluded:
+                            # no valid command was entered, but the entry was concluded
+                            break
+                        else:
+                            # show information about current non-concluded input
+                            self.visual.submit_partial_input(input_str, candidates)
+
             self.parse(input_str)
+
+    def match_command(self, inp):
+        candidate_commands = list(self.get_candidate_commands(inp))
+        exact_match = [inp == c for c in candidate_commands]
+        if any(exact_match):
+            exact_command = [candidate_commands[i] for i in range(len(exact_match)) if exact_match[i]][0]
+        else:
+            exact_command = None
+        return candidate_commands, exact_command
+
+    def get_command_full_name(self, cmd):
+        return [k for k in self.commands_dict if self.commands_dict[k] == cmd][0]
+
+    def get_candidate_commands(self, partial_str):
+        if not partial_str:
+            return self.commands_dict.values()
+        return [cmd for cmd in self.commands_dict.values() if utils.matches(partial_str, cmd)]
+
+    def realtime_input_concluded(self, inp):
+        """Handle realtime input
+
+        Returns:
+        valid_input -- Boolean
+        candidate_commands -- List of candidate commands if valid partial command, else empty list
+        command_full_name -- The command full name or None, if index list
+        """
+        # check for command match
+        candidate_commands, exact_command = self.match_command(inp)
+        if exact_command:
+            return True, [], self.get_command_full_name(exact_command)
+
+        # if the current string is a valid selection, update it
+        if utils.is_index_list(inp):
+            # set input cache
+            self.partial_realtime_input = inp
+            return True, [], "indexes"
+
+        if not candidate_commands:
+            # wholly invalid input
+            return False, [], None
+        else:
+            # show possible command matches from current string
+            # set input cache
+            self.partial_realtime_input = inp
+            return False, candidate_commands, None
 
     def repeat_last(self):
         """Fetches lastly executed command-argument pair

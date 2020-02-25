@@ -36,7 +36,7 @@ class Editor:
             return
 
         for key, old_value in selected:
-            new_value = self.visual.ask_user(f"Enter new value for setting: [{key}]")
+            new_value = self.visual.ask_user(f"Enter new value for setting: [{key}]", multichar=True)
             status, error_msg = self.config.update_user_setting(key, new_value)
             if not status:
                 self.visual.error(f"Erroneous value entered: {error_msg}, aborting.")

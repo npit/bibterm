@@ -77,7 +77,8 @@ def to_namedtuple(conf_dict, ntname="xxx"):
 def is_index_list(inp):
     """Determine if the input has only slicable numeric list elements
     """
-    return all([x in [" ", ":", "-"] or x.isdigit() for x in inp])
+    inp = inp.strip()
+    return len((inp)) > 0 and all([x in [" ", ":", "-"] or x.isdigit() for x in inp])
 
 
 def is_valid_index_list(inp):
@@ -131,7 +132,7 @@ def handle_string_index(num, total_index_num):
     except ValueError:
         # attempt to parse a slice
         if ":" in num:
-            return parse_slice(num)
+            return parse_slice(num, total_index_num)
         else:
             # invalid string
             return None

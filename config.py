@@ -10,6 +10,7 @@ import clipboard
 import utils
 from getters.getterFactory import GetterFactory
 from reader import Entry
+from visual.instantiator import available_uis
 
 
 class Config:
@@ -19,8 +20,17 @@ class Config:
     def __init__(self, conf_dict=None):
         if conf_dict is not None:
             self.conf_dict = conf_dict
-        self.user_setting_keys = ["bibtex_getter", "bibtex_getter_params", "pdf_getter", "pdf_getter_params", "pdf_dir", "visual", "tmp_dir", "bib_path", "view_columns", "sort_column", "search_result_size", "list_result_size"]
+        self.user_setting_keys = ["bibtex_getter", "bibtex_getter_params", "pdf_getter", "pdf_getter_params", "pdf_dir", "ui", "tmp_dir", "bib_path", "view_columns", "sort_column", "search_result_size", "list_result_size"]
         self.modified = False
+
+    def get_visual(self):
+        try:
+            return self.get_user_setting('ui')
+        except KeyError:
+            return "ttables"
+
+    def get_selection_commands(self):
+        return self.conf_dict["selection_commands"]
 
     def get_controls(self):
         return self.conf_dict["controls"]
@@ -65,8 +75,8 @@ class Config:
     def get_debug(self):
         return self.get()["debug"]
 
-    def get_visual(self):
-        return self.get_user_setting("visual")
+    def get_ui(self):
+        return self.get_user_setting("ui")
 
     def get_tmp_dir(self):
         return self.get_user_settings()["tmp_dir"]
@@ -122,7 +132,6 @@ class Config:
         # write
         self.write(self.get())
 
-
     def validate_setting(self, key, value):
         """Validate setting values"""
         valid, msg = True, "OK"
@@ -148,6 +157,10 @@ class Config:
                     raise ValueError
             except ValueError:
                 msg = f"Search / list result size has to be an integer"
+                valid = False
+        elif key == "ui":
+            if value not in available_uis:
+                msg = f"Ui {value} is undefined. Available ones are {available_uis}"
                 valid = False
         else:
             # ???
@@ -236,7 +249,6 @@ class Config:
         conf["actions"] = ["merge", "inspect"]
         conf["num_retrieved_bibtex"] = 5
 
-        conf["visual"] = "ttables"
         conf["pdf_dir"] = join(dirname(conf["bib_path"]), "pdfs")
         conf["tmp_dir"] = "/tmp/bib/"
 

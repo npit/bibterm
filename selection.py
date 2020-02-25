@@ -45,7 +45,6 @@ class Selector:
         if not entry_indexes:
             self.visual.error(f"Unable to match any entry id from {inp}")
             return None
-        import ipdb; ipdb.set_trace()
         return self.select_by_index(entry_indexes, yield_ones_index=yield_ones_index, parse_ones_index=False)
 
     def correct_for_sorting(self):
