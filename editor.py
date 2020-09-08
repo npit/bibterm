@@ -1,13 +1,28 @@
 import re
 import string
+import json
 from os import listdir, remove, rename, system
-from os.path import basename, dirname, exists, isabs, isdir, join, splitext
+from os.path import basename, dirname, exists, isabs, isdir, join, splitext, expanduser
 
 import utils
 from decorators import ignore_arg
 from getters.getter import Getter
 from visual.instantiator import setup
 
+def launch_file_editor(file_path):
+    """Launch file editor"""
+    system(f"vi '{file_path}'")
+
+def edit_manually(data, path=None, return_contents=True):
+    """Write data to a file, launch an editor and return results"""
+    if path is None:
+        path = join(expanduser("~"), ".config/bib/edit_manually")
+    with open(path, "w") as f:
+        f.write(data)
+    launch_file_editor(path)
+    if return_contents:
+        with open(path) as f:
+            return f.read()
 
 class Editor:
 
@@ -22,25 +37,38 @@ class Editor:
     def edit_settings(self):
         """Function to edit program user settings"""
         curr_settings = self.config.get_user_settings()
-        selected, _ = self.visual.user_multifilter(list(curr_settings.items()), "setting value".split(), message="Select setting to update")
-        if not selected:
-            if self.visual.yes_no("Add a new setting?", default_yes=False):
-                self.visual.message(f"Available keys are: {self.config.user_setting_keys}")
-                key = self.visual.ask_user("Enter key").strip()
-                if key in curr_settings.keys():
-                    if not self.visual.yes_no(f"That key exists -- replace existing value: {curr_settings[key]} ?"):
-                        self.visual.message("Aborting")
-                        return
-                value = self.visual.ask_user("Enter value").strip()
-                self.config.update_user_setting(key, value)
-            return
-
-        for key, old_value in selected:
-            new_value = self.visual.ask_user(f"Enter new value for setting: [{key}]", multichar=True)
-            status, error_msg = self.config.update_user_setting(key, new_value)
-            if not status:
-                self.visual.error(f"Erroneous value entered: {error_msg}, aborting.")
+        selected, _ = self.visual.user_multifilter(list(curr_settings.items()),
+            "setting value".split(), message="Select setting to update.", overriding_inputs=[("e", "Edit manually")])
+        if selected == "e":
+            try:
+                # get manually udpated settings
+                updated_settings = json.loads(edit_manually(json.dumps(curr_settings, indent=2)))
+                # check every k-v pair
+                for key, value in updated_settings.items():
+                    self.config.update_user_setting(key, value)
+            except Exception as ex:
+                self.visual.error(f"Failed to manually update settings: {ex}")
                 return
+        else:
+            # non-manual editing
+            if not selected:
+                if self.visual.yes_no("Add a new setting?", default_yes=False):
+                    self.visual.message(f"Available keys are: {self.config.user_setting_keys}")
+                    key = self.visual.ask_user("Enter key").strip()
+                    if key in curr_settings.keys():
+                        if not self.visual.yes_no(f"That key exists -- replace existing value: {curr_settings[key]} ?"):
+                            self.visual.message("Aborting")
+                            return
+                    value = self.visual.ask_user("Enter value").strip()
+                    self.config.update_user_setting(key, value)
+                return
+
+            for key, old_value in selected:
+                new_value = self.visual.ask_user(f"Enter new value for setting: [{key}]", multichar=True)
+                status, error_msg = self.config.update_user_setting(key, new_value)
+                if not status:
+                    self.visual.error(f"Erroneous value entered: {error_msg}, aborting.")
+                    return
         self.visual.message("Update complete.")
 
     def check_pdf_naming_consistency(self, entry_collection):

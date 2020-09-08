@@ -9,7 +9,7 @@ import clipboard
 
 import utils
 from getters.getterFactory import GetterFactory
-from reader import Entry
+from reader.entry import Entry
 from visual.instantiator import available_uis
 
 
@@ -141,7 +141,8 @@ class Config:
                 valid = False
                 msg = f"No getters named {value}. Available ones are {avail}"
         elif key == "view_columns":
-            value = value.split()
+            if type(value) == str:
+                value = value.split()
             invalids = [v for v in value if v not in Entry.useful_keys]
             if invalids:
                 valid = False
@@ -163,8 +164,8 @@ class Config:
                 msg = f"Ui {value} is undefined. Available ones are {available_uis}"
                 valid = False
         else:
-            # ???
-            import ipdb; ipdb.set_trace()
+            # un validate-able setting
+            pass
         return key, value, valid, msg
 
     def update_user_setting(self, key, value):
@@ -222,7 +223,7 @@ class Config:
             "merge": "m",
             "quit": "q",
             "save": "sa",
-            "cite": "c",
+            "cite": "ci",
             "cite-multi": "cm",
             "pdf_file": "fp",
             "debug": "deb",
@@ -267,7 +268,7 @@ class Config:
                 "sort_column": "ID"
             },
         """
-        conf["user_settings"] = {}
+        conf["user_settings"] = {"ui": "default"}
 
         return conf
 

@@ -4,7 +4,7 @@ import clipboard
 
 import visual
 from config import Config
-from reader import Reader
+from reader.reader import Reader
 from runner import Runner
 from utils import paste
 from writer import Writer
@@ -63,12 +63,14 @@ def main():
     parser = argparse.ArgumentParser(description="\n".join(help_str))
     parser.add_argument("actions", nargs="*", help="Available: {}".format(", ".join(conf_dict["actions"])))
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode.")
-    parser.add_argument("-u", "--ui", dest="ui", help="Override user interface type.")
+    parser.add_argument("-u", "--ui", dest="ui", default="ttables", help="Override user interface type.")
     parser_args = parser.parse_args()
 
     for arg in vars(parser_args):
         value = getattr(parser_args, arg)
         if arg in conf.user_setting_keys:
+            if value is None:
+                continue
             valid, msg = conf.update_user_setting(arg, value)
             if not valid:
                 print(msg)

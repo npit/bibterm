@@ -36,6 +36,7 @@ class TermTables(Io):
         cols = self.conf.get_view_columns()
         entries_strings = self.gen_entries_strings(x_iter, cols)
 
+
         if do_sort:
             scol = self.conf.get_sort_column()
             scol_idx = cols.index(scol)

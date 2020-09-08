@@ -9,7 +9,8 @@ from config import Config
 from decorators import *
 from editor import Editor
 from getters.getter import Getter
-from reader import Entry, Reader
+from reader.reader import Reader
+from reader.entry import Entry
 from search.searcher import Searcher
 from selection import Selector
 from visual.instantiator import setup
@@ -136,6 +137,7 @@ class Runner:
         res = self.selector.select_by_id(eids)
         if res is None:
             self.visual.error("Failed to select merged entry!")
+        self.show_entries()
 
     @ignore_arg
     def quit(self):
@@ -330,6 +332,7 @@ class Runner:
     def check(self, inp=None):
         # idxs = self.selector.select(inp)
         self.get_editor().check_consistency(self.entry_collection)
+
     # singleton getter fetcher
     def get_getter(self):
         if self.getter is None:

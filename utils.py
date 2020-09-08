@@ -21,6 +21,23 @@ class Backup:
 def datetime_str():
     return time.strftime("%d%m%y_%H%M%S")
 
+def bracket_pad_num(num, maxnum):
+    """Get a bracketed string representation of numbers, dealing with the maximum number padding"""
+    # compute padding
+    numpad = len(str(maxnum)) - len(str(num))
+    return "[{}]{}".format(num, " " * numpad)
+
+def make_indexed_list(x_iter):
+    """Produced an indexed list from the input collection"""
+    return ["{} {}".format(bracket_pad_num(i + 1, len(x_iter)), x_iter[i]) for i in range(len(x_iter))]
+
+def get_file_contents(path):
+    """Read file string contents"""
+    try:
+        with open(path) as f:
+            return f.read()
+    except IOError:
+        return None
 
 # convert objetct / members to list
 def listify(x):

@@ -58,7 +58,10 @@ class BibsonomyGetter(BaseGetter):
         if res['stat'] != 'ok':
             self.visual.error("Error fetching bibsonomy query '{}' : {}".format(query, res['stat']))
             return None
-        res = res['posts']['post']
-        res = [self.map_keys(res[i]["bibtex"]) for i in range(len(res))]
-        res = [{k: self.preproc_text(dct[k]) if k not in self.dont_preproc_keys else dct[k] for k in dct} for dct in res]
-        return sorted(res, key=lambda x: x['year'] if 'year' in x else x['title'])
+        try:
+            res = res['posts']['post']
+            res = [self.map_keys(res[i]["bibtex"]) for i in range(len(res))]
+            res = [{k: self.preproc_text(dct[k]) if k not in self.dont_preproc_keys else dct[k] for k in dct} for dct in res]
+            return sorted(res, key=lambda x: x['year'] if 'year' in x else x['title'])
+        except KeyError:
+            return []

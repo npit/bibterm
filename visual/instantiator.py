@@ -4,6 +4,7 @@ from visual.termtables import TermTables
 
 available_uis = [Io.name, Blessed.name, TermTables.name]
 
+
 # base class to get and print stuff
 def setup(config):
     visual_name = config.get_visual()

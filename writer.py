@@ -83,8 +83,8 @@ class Writer:
         try:
             with open(self.bib_path, "w") as f:
                 bibtexparser.dump(entry_collection.get_writable_db(), f)
-        except:
-            self.visual.error("Failed to update library file. Restoring previous version.")
+        except Exception as ex:
+            self.visual.error(f"Failed to update library file [{ex}]. Restoring previous version.")
             copyfile(tmp_path, self.bib_path)
 
     def write_confirm(self, entry_collection):

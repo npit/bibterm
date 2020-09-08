@@ -425,7 +425,6 @@ class Blessed(TermTables):
 
     def input_singlechar(self, evaluate_sequences=True, initial_entry=None):
         """Get single-character entries
-
         Returns:
         res -- The entry string
         concluded -- whether a finalizing key was pressed
@@ -469,43 +468,6 @@ class Blessed(TermTables):
             if single_char:
                 break
         return res
-
-        # if initial_entry is not None:
-        #     res = initial_entry
-        # else:
-        #     res = ""
-        # done = False
-        # while not done:
-        #     key = self.get_raw_input()
-        #     if self.get_metakey(key):
-        #         # metakey handling
-        #         name, func = self.get_metakey(key)
-        #         self.debug("Metakey: {}".format(name))
-        #         res += func(key)
-        #     elif key.is_sequence:
-        #         # blessed sequence key
-        #         if key.name == "KEY_DELETE":
-        #             self.clear_line(y, x)
-        #             if not res:
-        #                 # manage potential search_cache underflow
-        #                 self.search_cache_underflow = True
-        #             res = res[:-1]
-        #         if key.name == "KEY_ENTER":
-        #             # on enter, we're done
-        #             done = True
-        #         if key.name == "KEY_ESCAPE":
-        #             # on escape, return nothing
-        #             res = None
-        #             done = True
-        #     else:
-        #         # regular input
-        #         res += key
-        #     # print current entry
-        #     self.temp_print(res, x, y)
-        #     # for single-char mode, return immediately
-        #     if single_char:
-        #         break
-        # return res
 
     def up(self):
         if not self.use_buffer:

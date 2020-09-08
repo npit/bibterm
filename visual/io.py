@@ -175,7 +175,7 @@ class Io:
             # valid or no-option input
             return ans
 
-    def user_multifilter(self, collection, header, reference=None, print_func=None, preserve_col_idx=None, message=None):
+    def user_multifilter(self, collection, header, reference=None, print_func=None, preserve_col_idx=None, message=None, overriding_inputs=None):
         """Filtering function by user index selection. Reference can be used to keep track of input items"""
         if reference is None:
             reference = list(range(len(collection)))
@@ -186,11 +186,19 @@ class Io:
         while True:
             print_func(cur_collection, header=header, preserve_col_idx=preserve_col_idx)
             prompt = "{}Enter numeric indexes to modify the list, q to select none, or ENTER to proceed".format(message + ". " if message is not None else "")
+            if overriding_inputs is not None:
+                overriding_keys = [x[0] for x in overriding_inputs]
+                prompt += "-- Override(s): "
+                for key, msg in overriding_inputs:
+                    prompt += f"{key}: {msg}"
             idxs = None
             while True:
                 str_inp = self.ask_user(prompt, multichar=True)
                 if str_inp == "q":
                     return [], []
+                if overriding_inputs is not None:
+                    if str_inp in overriding_keys:
+                        return str_inp, None
                 idxs = utils.get_index_list(str_inp, len(cur_collection))
                 if idxs is None:
                     self.error("Invalid input: [{}], please read the instructions.".format(str_inp))
@@ -233,15 +241,11 @@ class Io:
             return ""
         return "({})".format(", ".join(keywords))
 
-    def num_str(self, num, maxnum):
-        numpad = len(str(maxnum)) - len(str(num))
-        return "[{}]{}".format(num, " " * numpad)
-
     # enumerate a collection with indexes
     def enum(self, x_iter):
-        return ["{} {}".format(self.num_str(i + 1, len(x_iter)), x_iter[i]) for i in range(len(x_iter))]
+        return utils.make_indexed_list(x_iter)
 
-    def print_enum(self, x_iter, at_most=None, additionals=None, header=None):
+    def print_enum(self, x_iter, at_most=None, additionals=None, header=None, preserve_col_idx=None):
         if self.only_debug and not self.do_debug:
             return
         # check which items will be printed
@@ -268,11 +272,14 @@ class Io:
     def gen_entry_enum_strings(self, entry, maxlens, num, max_num=None):
         if max_num is None:
             max_num = maxlens[0]
-        return (self.num_str(num, max_num), self.ID_str(entry.ID, maxlens[1]),
+        return (utils.bracket_pad_num(num, max_num), self.ID_str(entry.ID, maxlens[1]),
                 self.title_str(entry.title, maxlens[2]), self.keyword_str(entry.keywords))
 
     # produce enumeration strings
-    def gen_entries_strings(self, entries, cols):
+    def gen_entries_strings(self, entries, cols=None):
+        """Get entry representation"""
+        if cols is None:
+            cols = ["id", "author", "year", "title"]
         # get listable elements from the entry based on the config
         # collect data
         data = []
@@ -289,8 +296,9 @@ class Io:
             return
         self.print("debug: {}".format(msg))
 
+
     # print a list of entries
-    def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False):
+    def print_entries_enum(self, x_iter, entry_collection, at_most=None, additional_fields=None, print_newline=False, do_sort=False):
         if self.only_debug and not self.do_debug:
             return
         if not x_iter:
@@ -318,7 +326,7 @@ class Io:
         st = json.dumps(self.get_entry_contents(entry), indent=2)
         # remove enclosing {}
         st = " " + st.strip()[1:-1].strip()
-        st += st + " \n{}".format("_" * 15)
+        st += " \n{}".format("_" * 15)
         self.print(st)
 
     def print_entries_contents(self, entries):
