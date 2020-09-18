@@ -30,6 +30,15 @@ class Selector:
         """Function to clear the cached selection"""
         self.cached_selection = None
 
+    def select_by_objects(self, inp, yield_ones_index=False):
+        """Select item(s) from the entry list by entry object
+        :param inp: str, String representing a selection by ID
+        :return idxs: list, List of index selection to the reference
+        """
+        if type(inp) is not list:
+            inp = [inp]
+        return self.select_by_id([e.ID for e in inp])
+
     def select_by_id(self, inp, yield_ones_index=False):
         """Select item(s) from the entry list by entry ID
         :param inp: str, String representing a selection by ID
@@ -90,12 +99,15 @@ class Selector:
         # correct for selections on a sorted list
         self.correct_for_sorting()
 
-        return self.get_selection(yield_ones_index)
+        return self.get_selection(yield_ones_index, default_to_reference=default_to_reference)
 
-    def get_selection(self, yield_ones_index=False):
+    def get_selection(self, yield_ones_index=False, default_to_reference=False):
         """Retrieve the selected entries"""
         if not self.cached_selection:
-            return []
+            if default_to_reference:
+                return range(len(self.entry_id_list))
+            else:
+                return []
         if yield_ones_index:
             return [n + 1 for n in self.cached_selection]
         return self.cached_selection

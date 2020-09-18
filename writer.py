@@ -7,6 +7,12 @@ import utils
 from visual.instantiator import setup
 
 
+def dict_to_raw_bibtex(entry_dict):
+    """Convert an entry dict to a bibtex entry"""
+    w = bibtexparser.bwriter.BibTexWriter()
+    res = w.write(entry_dict)
+    return res
+
 class Writer:
 
     bib_path = None
@@ -94,3 +100,17 @@ class Writer:
             self.visual.print("Wrote!")
         else:
             self.visual.print("Aborting.")
+
+    @staticmethod
+    def entries_to_bibtex_string(entries):
+        """Make a bibtex db from input entries"""
+        entries = [entries] if type(entries) != list else entries
+        entries_string = []
+        writer = bibtexparser.bwriter.BibTexWriter()
+        for e in entries:
+            wd = e.get_writable_dict()
+            bt = writer._entry_to_bibtex(wd)
+            entries_string.append(bt)
+        entries_string = "\n".join(entries_string)
+        return entries_string
+

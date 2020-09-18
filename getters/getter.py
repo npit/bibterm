@@ -30,6 +30,9 @@ class Getter:
         self.pdf_apis = self.config.get_pdf_apis()
         self.bibtex_apis = self.config.get_bibtex_apis()
         self.num_retrieved_bibtex = self.config.get_num_retrieved_bibtex()
+        if self.num_retrieved_bibtex is None:
+            self.num_retrieved_bibtex = 5
+            
 
         # instantiate user selections
         self.instantiate_selected_apis()

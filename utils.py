@@ -39,6 +39,12 @@ def get_file_contents(path):
     except IOError:
         return None
 
+def stringify(value, key, joiner=", "):
+    value = joiner.join(value).strip()
+    if value.endswith(","):
+        value = value[:-1]
+    return value.strip()
+
 # convert objetct / members to list
 def listify(x):
     if type(x) not in (list, tuple):

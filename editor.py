@@ -24,6 +24,9 @@ def edit_manually(data, path=None, return_contents=True):
         with open(path) as f:
             return f.read()
 
+def edit_entry_manually(entry):
+    return edit_manually(json.dumps(entry.raw_dict, indent=2))
+
 class Editor:
 
     def __init__(self, conf):
@@ -32,6 +35,9 @@ class Editor:
         self.collection_modified = False
         self.clear_cache()
         self.pdf_dir = self.config.get_pdf_dir()
+
+    def edit_entry_manually(self, entry):
+        return edit_entry_manually(entry)
 
     @ignore_arg
     def edit_settings(self):

@@ -10,6 +10,7 @@ from decorators import *
 from editor import Editor
 from getters.getter import Getter
 from reader.reader import Reader
+from writer import Writer
 from reader.entry import Entry
 from search.searcher import Searcher
 from selection import Selector
@@ -30,7 +31,6 @@ class Runner:
         self.getter = None
         self.editor = None
         self.sorter = None
-        self.cached_selection = None
 
         # read the bib database
         if entry_collection is None:
@@ -70,11 +70,20 @@ class Runner:
     def test(self, kwargs):
         self.visual.log(f"Printing the func! {kwargs}")
 
+    def get_current_entries(self):
+        idxs = self.selector.get_selection(default_to_reference=True)
+        ids = [self.reference_entry_id_list[i] for i in idxs]
+        return [self.entry_collection.entries[eid] for eid in ids]
+
     def map_ids_to_functions(self):
         self.function_id_map = {}
 
         ctrls = {k: k for k in self.config.get_controls()}
         commands = utils.to_namedtuple(ctrls)
+        self.function_id_map[commands.edit] = self.edit_entry
+        self.function_id_map[commands.filter] = self.apply_filter
+        self.function_id_map[commands.bibtex_show] = self.show_raw_bibtex
+        self.function_id_map[commands.bibtex_copy] = self.copy_raw_bibtex
         self.function_id_map[commands.history_back] = self.step_history
         self.function_id_map[commands.history_forward] = self.step_history
         self.function_id_map[commands.history_jump] = self.jump_history
@@ -120,6 +129,56 @@ class Runner:
         """Clearing function"""
         self.visual.clear()
 
+    def show_raw_bibtex(self, entry_idx=None):
+        """Display raw bibtex of the selection"""
+        if entry_idx is None:
+            entry_idx = self.selector.get_selection()
+        else:
+            entry_idx = self.selector.select_by_index(entry_idx)
+        if not entry_idx:
+            self.visual.error("Need a selection to show raw bibtex of")
+            return
+        self.visual.message(f"Displaying raw bibtex content of {len(entry_idx)} entries.")
+        self.visual.newline()
+        entries = self.get_current_entries()
+        entries_string = Writer.entries_to_bibtex_string(entries)
+        self.visual.print(entries_string)
+
+    def copy_raw_bibtex(self, entry_idx=None):
+        """Copy the raw bibtex of the selection"""
+        if entry_idx is None:
+            entry_idx = self.selector.get_selection()
+        else:
+            entry_idx = self.selector.select_by_index(entry_idx)
+        if not entry_idx:
+            self.visual.error("Need a selection to show raw bibtex of")
+            return
+
+        entries = self.get_current_entries()
+        entries_string = Writer.entries_to_bibtex_string(entries)
+        clipboard.copy(entries_string)
+        self.visual.message(f"Copied raw bibtex content of {len(entries)} entries.")
+
+    def edit_entry(self, entry_idx=None):
+        if entry_idx is None:
+            entry_idx = self.selector.get_selection()
+        else:
+            entry_idx = self.selector.select_by_index(entry_idx)
+        if entry_idx is None:
+            self.visual.error("Need a selection to edit")
+            return
+        for i in entry_idx:
+            entry = self.entry_collection.entries[self.reference_entry_id_list[i]]
+            updated_entry = Entry.from_string(self.get_editor().edit_entry_manually(entry))
+            self.entry_collection.replace(updated_entry, old_id=entry.ID)
+
+    def apply_filter(self, filter_arg):
+        """Apply a listing filter"""
+        filtered_entries = self.visual.apply_filter(filter_arg, self.get_current_entries())
+        # idxs = self.selector.select_by_objects(filtered_entries, yield_ones_index=True)
+        self.visual.print_entries_enum(filtered_entries, None)
+        # self.list(idxs)
+
     @ignore_arg
     def merge(self):
         """Add ocntents from the clipboard"""
@@ -137,6 +196,7 @@ class Runner:
         res = self.selector.select_by_id(eids)
         if res is None:
             self.visual.error("Failed to select merged entry!")
+        self.visual.log("Merged new entr{}:".format("y" if len(res) == 1 else "ies"))
         self.show_entries()
 
     @ignore_arg
@@ -345,8 +405,8 @@ class Runner:
             self.searcher = Searcher()
         return self.searcher
 
-    # singleton editor fetcher
     def get_editor(self):
+        """singleton editor fetcher"""
         if self.editor is None:
             self.editor = Editor(self.config)
         return self.editor
@@ -366,23 +426,7 @@ class Runner:
         return self.entry_collection.modified_collection
 
     def unselect(self):
-        self.cached_selection = None
-
-
-    def get_index_from_id_list(self, entry_ids):
-        """Select item(s) from the entry list by their id"""
-        if type(entry_ids) is str:
-            entry_ids = [entry_ids]
-        # reset the referenct id list
-        self.reset_history()
-        idxs = []
-        for eid in entry_ids:
-            if eid not in self.reference_entry_id_list:
-                self.visual.error(f"Entry ID {eid} not in the current reference list!")
-                continue
-            # append one's index
-            idxs.append(1 + self.reference_entry_id_list.index(eid))
-        self.cached_selection = idxs
+        self.selector.clear_cached()
 
     def debug(self):
         """Enter debug mode"""
@@ -609,6 +653,8 @@ class Runner:
                 return
         getter = Getter(self.config)
         pdf_url = self.visual.ask_user("Give pdf url to download", multichar=True)
+        if pdf_url is None:
+            return
         file_path = getter.download_web_pdf(pdf_url, entry_id)
         if file_path is None:
             self.visual.error("Failed to download from {}.".format(pdf_url))
@@ -630,7 +676,7 @@ class Runner:
             if not self.visual.yes_no("Pdf attribute exists: {}, replace?".format(entry.file), default_yes=False):
                 return
         pdf_path = self.get_getter().search_web_pdf(entry_id, self.get_searcher().preprocess_query(entry.title), entry.year)
-        if not pdf_path:
+        if pdf_path is None:
             self.visual.log("Invalid pdf path, aborting.")
             return
         updated_entry = self.get_editor().set_file(entry, file_path=pdf_path)

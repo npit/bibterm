@@ -1,5 +1,6 @@
 import json
 from itertools import combinations
+from visual.filterer import Filterer
 
 import utils
 
@@ -21,6 +22,13 @@ class Io:
 
     log_history = []
     sorting_index = []
+
+    filterer = None
+    filtering_keys = "id author year title".split()
+    def get_filterer(self):
+        if self.filterer is None:
+            self.filterer = Filterer(self, self.filtering_keys)
+        return self.filterer
 
     def set_only_debug(self, val):
         self.only_debug = val
@@ -50,6 +58,12 @@ class Io:
         self.reset_sorting_index()
         self.sorting_index.extend(idxs)
 
+    def apply_filter(self, filter_str, entries):
+        """Apply a filter to the listed entries"""
+        # self.get_filterer().parse_filters(filter_str)
+        entries = self.get_filterer().apply_filters(filter_str, entries)
+        return entries
+        
     def clear(self):
         for _ in range(self.clear_size):
             self.newline()

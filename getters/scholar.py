@@ -25,10 +25,14 @@ class ScholarGetter(BaseGetter):
 
         web_pdf_path = None
         while True:
-            self.visual.pause("Copy web pdf path and press enter to continue")
-            web_pdf_path = utils.paste()
-            if not web_pdf_path:
-                if not self.visual.yes_no("Empty path -- retry?"):
-                    return None
+            response = self.visual.ask_user("Copy web pdf path and press ENTER to continue, or enter any input to cancel")
+            if response == "":
+                web_pdf_path = utils.paste()
+                if not web_pdf_path:
+                    if not self.visual.yes_no("Empty path -- retry?"):
+                        return None
+                else:
+                    return web_pdf_path
             else:
-                return web_pdf_path
+                self.visual.log("Cancelling web pdf search.")
+                return None
