@@ -75,6 +75,11 @@ class Runner:
         ids = [self.reference_entry_id_list[i] for i in idxs]
         return [self.entry_collection.entries[eid] for eid in ids]
 
+    def show_input_history(self):
+        """Display the input history"""
+        # copy with user multifilter
+        pass
+
     def map_ids_to_functions(self):
         self.function_id_map = {}
 
@@ -82,6 +87,7 @@ class Runner:
         commands = utils.to_namedtuple(ctrls)
         self.function_id_map[commands.edit] = self.edit_entry
         self.function_id_map[commands.filter] = self.apply_filter
+        self.function_id_map[commands.history_input] = self.show_input_history
         self.function_id_map[commands.bibtex_show] = self.show_raw_bibtex
         self.function_id_map[commands.bibtex_copy] = self.copy_raw_bibtex
         self.function_id_map[commands.history_back] = self.step_history
@@ -108,7 +114,7 @@ class Runner:
         self.function_id_map[commands.up] = self.visual.up
         self.function_id_map[commands.down] = self.visual.down
         self.function_id_map[commands.check] = self.check
-        self.function_id_map[commands.settings] = self.get_editor().edit_settings
+        self.function_id_map[commands.settings] = self.edit_settings
         self.function_id_map[commands.merge] = self.merge
         self.function_id_map[commands.quit] = self.quit
         self.function_id_map[commands.debug] = self.debug
@@ -123,6 +129,12 @@ class Runner:
         self.command_parser.prevent_archiving(commands.settings)
         self.command_parser.prevent_archiving(commands.clear)
         self.command_parser.prevent_archiving(commands.unselect)
+
+    def edit_settings(self, keyval=None):
+        self.get_editor().edit_settings(keyval)
+        # reset getter
+        if self.getter is not None:
+            self.getter = None
 
     @ignore_arg
     def clear(self):
@@ -171,6 +183,8 @@ class Runner:
             entry = self.entry_collection.entries[self.reference_entry_id_list[i]]
             updated_entry = Entry.from_string(self.get_editor().edit_entry_manually(entry))
             self.entry_collection.replace(updated_entry, old_id=entry.ID)
+        # deselect
+        self.selector.clear_cached()
 
     def apply_filter(self, filter_arg):
         """Apply a listing filter"""
@@ -241,7 +255,7 @@ class Runner:
         if getter is None:
             return
         if not arg:
-            arg = self.visual.ask_user("Search what on the web?", multichar=True)
+            arg = self.visual.ask_user(f"Search what on the web?", multichar=True)
             if not arg:
                 self.visual.error("Nothing entered, aborting.")
                 return
@@ -269,7 +283,8 @@ class Runner:
             return
         self.visual.print_entries_contents(selected_entries)
 
-        if self.visual.yes_no("Store?"):
+        res = self.visual.ask_user("Store?", "*yes no-but-keep quit")
+        if utils.matches(res, "yes"):
             selected_ids = []
             for entry in selected_entries:
                 created_entry = self.entry_collection.add_new_entry(entry)
@@ -277,8 +292,10 @@ class Runner:
                     self.visual.error(f"Entry {entry.ID} already exists in the collection!")
                 else:
                     selected_ids.append(created_entry.ID)
-        else:
+        elif utils.matches(res, "no-but-keep"):
             selected_ids = [x for x in selected_entries]
+        elif utils.matches(res, "quit"):
+            return
         if not selected_ids:
             return
         if self.visual.yes_no("Select it?"):

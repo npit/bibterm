@@ -223,9 +223,11 @@ class EntryCollection:
                 return i
 
     def get_writable_db(self):
-        for i, entry in enumerate(self.entries):
+        for i, entry_dict in enumerate(self.bibtex_db.entries):
+            entry_id = entry_dict["ID"]
+            entry = self.entries[entry_id.lower()]
             self.bibtex_db.entries[i] = entry.get_writable_dict()
-        self.bibtex_db.make_entries_dict()
+        self.bibtex_db._make_entries_dict()
         return self.bibtex_db
 
         # stringify_keys = ["author", "keywords", "journal", "link"]

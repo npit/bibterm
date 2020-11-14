@@ -158,7 +158,7 @@ class IDFix(FixRule):
         # update the ID
         entry.set_id(self.fixed_object)
         # add it
-        self.db.add_new_entry(entry)
+        self.db.add_entry(entry, can_replace=False)
 
 class KeywordFix(FixRule):
     """Fix for the entry keywords"""

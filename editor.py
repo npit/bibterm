@@ -39,13 +39,20 @@ class Editor:
     def edit_entry_manually(self, entry):
         return edit_entry_manually(entry)
 
-    @ignore_arg
-    def edit_settings(self):
+    def edit_settings(self, args=None):
         """Function to edit program user settings"""
         curr_settings = self.config.get_user_settings()
-        selected, _ = self.visual.user_multifilter(list(curr_settings.items()),
-            "setting value".split(), message="Select setting to update.", overriding_inputs=[("e", "Edit manually")])
-        if selected == "e":
+
+        if args is None:
+            selected, _ = self.visual.user_multifilter(list(curr_settings.items()),
+                "setting value".split(), message="Select setting to update.", overriding_inputs=[("e", "Edit manually")])
+        else:
+            args = args.split(maxsplit=1)
+            key, value = args[0], " ".join(args[1:])
+            self.config.update_user_setting(key, value)
+            return
+
+        if type(selected) == str and utils.matches(selected, "edit-manually"):
             try:
                 # get manually udpated settings
                 updated_settings = json.loads(edit_manually(json.dumps(curr_settings, indent=2)))

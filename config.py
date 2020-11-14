@@ -211,6 +211,10 @@ class Config:
         conf["controls"] = {
             "search": "/",
             "down": "j",
+            "edit": "e",
+            "filter": "fi",
+            "bibtex_show": "bs",
+            "bibtex_copy": "bc",
             "get": "g",
             "up": "k",
             "list": "l",

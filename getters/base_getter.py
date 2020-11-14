@@ -14,6 +14,7 @@ class BaseGetter:
         return self.base_url + query
 
     def get_bibtex(self, query):
+        self.visual.error(f"Getter {self.name} cannot search for bibtexs!")
         pass
 
     def get_params(self):
@@ -29,8 +30,6 @@ class BaseGetter:
         except Exception as ex:
             self.visual.error("Failed to complete the bibtex-fetching query. Reason: {}".format(ex))
             return []
-        if not res:
-            self.visual.error("No data retrieved.")
         if res is None:
             res = []
         return res
