@@ -3,3 +3,6 @@ fuzzywuzzy
 blessed
 bibtexparser
 gscholar
+bibsonomy
+scholarly
+terminaltables

@@ -95,7 +95,7 @@ class Runner:
         self.function_id_map[commands.history_jump] = self.jump_history
         self.function_id_map[commands.history_reset] = self.reset_history
         self.function_id_map[commands.history_show] = self.show_history
-        self.function_id_map[commands.log_history] = self.show_log_history
+        self.function_id_map[commands.history_log] = self.show_history_log
         self.function_id_map[commands.delete] = self.delete_entry
         self.function_id_map[commands.cite] = self.cite
         self.function_id_map[commands.cite_multi] = self.multi_cite
@@ -554,9 +554,9 @@ class Runner:
         self.visual.print_enum(self.command_history, additionals=current_mark)
         self.visual.debug("History length: {}, history lengths: {}, current index: {}, current length: {}.".format(len(self.reference_history), [len(x) for x in self.reference_history], self.reference_history_index, len(self.reference_entry_id_list)))
 
-    def show_log_history(self):
+    def show_history_log(self):
         """Display the history of past logs"""
-        self.visual.print_enum(self.visual.log_history)
+        self.visual.print_enum(self.visual.history_log)
 
     def change_history(self, new_reflist, modification_msg):
         """Change the reference list to its latest modificdation

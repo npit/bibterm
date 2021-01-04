@@ -206,7 +206,9 @@ class Config:
         conf["browser"] = browser_cmd
         return conf
 
-    def get_defaults(conf):
+    @staticmethod
+    def get_defaults(bib_path):
+        conf = {}
         # controls
         conf["controls"] = {
             "search": "/",
@@ -228,13 +230,14 @@ class Config:
             "quit": "q",
             "save": "sa",
             "cite": "ci",
-            "cite-multi": "cm",
+            "cite_multi": "cm",
             "pdf_file": "fp",
             "debug": "deb",
             "pdf_search": "fs",
             "pdf_web": "fw",
             "pdf_open": "o",
             "history_show": "hs",
+            "history_input": "hi",
             "history_reset": "hr",
             "history_jump": "hj",
             "history_back": "hb",
@@ -245,7 +248,7 @@ class Config:
         }
 
         # controls that can act on selection(s)
-        conf["selection_commands"] = ["list", "delete", "cite", "cite-multi", "tag", "pdf_file", "pdf_web", "pdf_open"]
+        conf["selection_commands"] = ["list", "delete", "cite", "cite_multi", "tag", "pdf_file", "pdf_web", "pdf_open"]
 
         conf["pdf_apis"] = ["gscholar", "scihub", "bibsonomy"]
         conf["bibtex_apis"] = ["gscholar", "scholarly", "bibsonomy"]
@@ -254,8 +257,6 @@ class Config:
         conf["actions"] = ["merge", "inspect"]
         conf["num_retrieved_bibtex"] = 5
 
-        conf["pdf_dir"] = join(dirname(conf["bib_path"]), "pdfs")
-        conf["tmp_dir"] = "/tmp/bib/"
 
         # fill in key-value pairs like the example config belowbelow
         """
@@ -273,6 +274,9 @@ class Config:
             },
         """
         conf["user_settings"] = {"ui": "default"}
+        conf["user_settings"]["bib_path"] = bib_path
+        conf["user_settings"]["pdf_dir"] = join(dirname(bib_path), "pdfs")
+        conf["user_settings"]["tmp_dir"] = "/tmp/bib/"
 
         return conf
 
@@ -287,7 +291,7 @@ class Config:
         if not exists(conf_filepath):
             # if not existing, create it interactively
             print("Configuration file {} does not exist, creating.".format(conf_filepath))
-            conf = self.create_config()
+            bib_path = input("Give full path to library bibtex file: ")
             initialized = True
             # write config file for addbib
             conf_dir = dirname(conf_filepath)
@@ -295,7 +299,7 @@ class Config:
                 print("Creating configuration directory to {}".format(conf_dir))
                 makedirs(dirname(conf_filepath))
 
-            conf = self.get_defaults(conf)
+            conf = Config.get_defaults(bib_path)
             print("Writing configuration to {}".format(conf_filepath))
             with open(conf_filepath, "w") as f:
                 json.dump(conf, f)
