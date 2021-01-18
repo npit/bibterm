@@ -97,19 +97,25 @@ def to_namedtuple(conf_dict, ntname="xxx"):
     return conf
 
 
-def is_index_list(inp):
+def string_is_index_list(inp: str):
     """Determine if the input has only slicable numeric list elements
     """
     inp = inp.strip()
     return len((inp)) > 0 and all([x in [" ", ":", "-"] or x.isdigit() for x in inp])
 
 
-def is_valid_index_list(inp):
-    if not is_index_list(inp):
-        return False
-    if ":" in inp:
-        consequtive_colons = any([inp[i] == inp[i + 1] == ":" for i in range(len(inp) - 1)])
-        if len(inp) == 1 or consequtive_colons:
+def is_valid_index_list(inp, reference_container=None):
+    if type(inp) is str:
+        if not string_is_index_list(inp):
+            return False
+        if ":" in inp:
+            consequtive_colons = any([inp[i] == inp[i + 1] == ":" for i in range(len(inp) - 1)])
+            if len(inp) == 1 or consequtive_colons:
+                return False
+    if reference_container is not None:
+        inp = get_index_list(inp, len(reference_container))
+        # check it's within limits
+        if any(i > len(reference_container) for i in inp):
             return False
     return True
 

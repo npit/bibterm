@@ -20,8 +20,15 @@ class Config:
     def __init__(self, conf_dict=None):
         if conf_dict is not None:
             self.conf_dict = conf_dict
-        self.user_setting_keys = ["bibtex_getter", "bibtex_getter_params", "pdf_getter", "pdf_getter_params", "pdf_dir", "ui", "tmp_dir", "bib_path", "view_columns", "sort_column", "search_result_size", "list_result_size"]
+        self.user_setting_keys = ["bibtex_getter", "bibtex_getter_params", "pdf_getter", "pdf_getter_params", 
+                                "pdf_dir", "ui", "tmp_dir", "bib_path", "view_columns", "sort_column",
+                                "search_result_size", "list_result_size", "searcher", "editor"]
         self.modified = False
+
+    def get_searcher(self):
+        s =  self.get_user_setting('searcher')
+        if s is None:
+            return "fuzzy"
 
     def get_visual(self):
         try:
@@ -66,17 +73,23 @@ class Config:
     def get_user_settings(self):
         return self.conf_dict["user_settings"]
 
-    def get_user_setting(self, key):
+    def get_editor(self):
+         return self.get_user_setting("editor", default="vim")
+
+    def get_user_setting(self, key, default=None):
         try:
             return self.get_user_settings()[key]
         except KeyError:
-            return None
+            return default
 
     def get_debug(self):
         return self.get()["debug"]
 
     def get_ui(self):
         return self.get_user_setting("ui")
+
+    def get_config_file_dir(self):
+        return self.config_file_dir
 
     def get_tmp_dir(self):
         return self.get_user_settings()["tmp_dir"]
@@ -100,10 +113,8 @@ class Config:
             return 30
 
     def get_pdf_dir(self):
-        pdir = self.get_user_settings()["pdf_dir"]
-        if pdir is None:
-            pdir = join(dirname(self.get_user_settings()["bib_path"]), "pdfs")
-        return pdir
+        default = join(dirname(self.get_user_setting("bib_path")), "pdfs")
+        return self.get_user_setting("pdf_dir", default=default)
 
     def write(self, conf, path=None):
         try:
@@ -250,7 +261,7 @@ class Config:
         # controls that can act on selection(s)
         conf["selection_commands"] = ["list", "delete", "cite", "cite_multi", "tag", "pdf_file", "pdf_web", "pdf_open"]
 
-        conf["pdf_apis"] = ["gscholar", "scihub", "bibsonomy"]
+        conf["pdf_apis"] = ["scholar", "scihub", "bibsonomy"]
         conf["bibtex_apis"] = ["gscholar", "scholarly", "bibsonomy"]
         conf["doi_apis"] = ["crossref"]
 
@@ -286,7 +297,11 @@ class Config:
         # backup copied data, in case we are adding an entry
         copied_data = utils.paste(single_line=False)
         initialized = False
+
         conf_filepath = self.get_filepath()
+        conf_dir = dirname(conf_filepath)
+        self.config_file_dir = conf_dir
+
         # check for existence of config file
         if not exists(conf_filepath):
             # if not existing, create it interactively
@@ -294,7 +309,6 @@ class Config:
             bib_path = input("Give full path to library bibtex file: ")
             initialized = True
             # write config file for addbib
-            conf_dir = dirname(conf_filepath)
             if not exists(conf_dir):
                 print("Creating configuration directory to {}".format(conf_dir))
                 makedirs(dirname(conf_filepath))
@@ -311,6 +325,10 @@ class Config:
         # restore copied data
         clipboard.copy(copied_data)
         self.conf_dict = conf
+        # put empty settings keys
+        for sett_key in self.user_setting_keys:
+            if sett_key not in conf["user_settings"]:
+                conf["user_settings"][sett_key] = None
         return conf
 
     def get_namedtuple(self, conf_dict=None):

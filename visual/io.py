@@ -221,6 +221,10 @@ class Io:
             if idxs:
                 # subset was selected
                 idxs = sorted(set(idxs))
+                # check off limits
+                if not utils.is_valid_index_list(idxs, cur_collection):
+                    self.error("Selection off bounds")
+                    return None, None
                 cur_collection = [cur_collection[i-1] for i in idxs]
                 cur_reference = [cur_reference[i-1] for i in idxs]
                 # return immediately for single-selections

@@ -12,7 +12,7 @@ from getters.getter import Getter
 from reader.reader import Reader
 from writer import Writer
 from reader.entry import Entry
-from search.searcher import Searcher
+from search.searcher_factory import create_searcher
 from selection import Selector
 from visual.instantiator import setup
 
@@ -220,34 +220,14 @@ class Runner:
         self.is_running = False
 
     def search_for_entry(self, query):
-        """Launch a search to the entry collection
-        """
-        if not query:
-            return []
-        results_ids, match_scores = [], []
-        # perform the search on all searchable fields
-        for field in self.searchable_fields:
-            self.visual.debug(f"Searching field {field} for {query}")
-            res = self.filter(field, query)
-            ids, scores = [r[0] for r in res], [r[1] for r in res]
-            for i in range(len(ids)):
-                if ids[i] in results_ids:
-                    existing_idx = results_ids.index(ids[i])
-                    # replace score, if it's higher
-                    if scores[i] > match_scores[existing_idx]:
-                        match_scores[existing_idx] = scores[i]
-                else:
-                    # if not there, just append
-                    results_ids.append(ids[i])
-                    match_scores.append(scores[i])
-
-        results_ids = sorted(zip(results_ids, match_scores), key=lambda x: x[1], reverse=True)
-        # apply max search results filtering
-        results_ids = results_ids[:self.get_max_search()]
-        results_ids, match_scores = [r[0] for r in results_ids], [r[1] for r in results_ids]
+        searcher = self.get_searcher()
+        searcher.prepare(self.entry_collection.get_searchable_format(), self.config.get_config_file_dir(), self.get_max_search(), self.searchable_fields)
+        breakpoint()
+        results_ids = searcher.search(query)
 
         self.visual.print_entries_enum([self.entry_collection.entries[ID] for ID in results_ids], self.entry_collection, do_sort=False)
         return results_ids
+
 
     def get_bibtex(self, arg=None):
         """Function to fetch a bibtex"""
@@ -419,7 +399,7 @@ class Runner:
     # singleton searcher fetcher
     def get_searcher(self):
         if self.searcher is None:
-            self.searcher = Searcher()
+            self.searcher = create_searcher(self.config.get_searcher())
         return self.searcher
 
     def get_editor(self):
@@ -469,42 +449,6 @@ class Runner:
             pass
         self.visual.log("Listing {} entries.".format(len(show_list)))
         self.visual.print_entries_enum([self.entry_collection.entries[x] for x in show_list], self.entry_collection, at_most=self.get_max_list())
-
-    def is_multivalue_key(self, filter_key):
-        return filter_key in self.multivalue_keys
-
-    # show entries matching a filter
-    def filter(self, filter_key, filter_value, max_search=None):
-        if max_search is None:
-            max_search = self.get_max_search()
-        if filter_key not in self.searchable_fields:
-            self.visual.warn("Must filter with a key in: {}".format(self.searchable_fields))
-            return
-        candidate_values = []
-        searched_entry_ids = []
-        # get candidate values, as key to a value: entry_id dict
-        for x in self.reference_entry_id_list:
-            entry = self.entry_collection.entries[x]
-            value = getattr(entry, filter_key)
-            if value is None or len(value) == 0:
-                continue
-
-            if type(value) == str:
-                value = value.lower()
-            searched_entry_ids.append(x)
-            candidate_values.append(value)
-
-        # search and return ids of results
-        res = self.get_searcher().fuzzy_search(filter_value, candidate_values, max_search, self.is_multivalue_key(filter_key))
-        if filter_key == "ID":
-            # return the IDs
-            return [r[0] for r in res]
-        elif filter_key == "title":
-            return [(self.entry_collection.title2id[r[0][0]], r[0][1]) for r in res]
-        elif self.is_multivalue_key(filter_key):
-            # limit results per keyword
-            res = [(searched_entry_ids[r[1]], r[0][1]) for r in res]
-        return res
 
     def jump_history(self, index):
         """Jump to a specific history step"""
@@ -563,15 +507,15 @@ class Runner:
 
         Calling the function after a search will set the reference list to the resulting entry set.
         """
-        self.visual.log("Changed reference list to [{}], with {} items.".format(modification_msg, len(new_reflist)))
+        self.visual.log("New reference list wrt: [{}], yielded {} items.".format(modification_msg, len(new_reflist)))
         self.push_reference_list(new_reflist, modification_msg)
         # unselect stuff -- it's meaningless now
         self.unselect()
 
     # add to reference list history
     def push_reference_list(self, new_list, command, force=False):
-        # no duplicates
-        if new_list == self.reference_entry_id_list and not force:
+        # no duplicates or empty ref. list
+        if (new_list == self.reference_entry_id_list or len(new_list) == 0) and not force:
             return
         # register the new reference
         self.reference_history.append(new_list)

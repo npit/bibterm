@@ -56,6 +56,9 @@ class EntryCollection:
             ent = self.add_entry_to_collection_containers(ent)
 
 
+    def get_searchable_format(self):
+        return self.bibtex_db.entries_dict
+
     # check and log missing entry elements
     def check_for_missing_fields(self):
         missing_per_entry = {}

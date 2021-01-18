@@ -33,7 +33,6 @@ class Getter:
         if self.num_retrieved_bibtex is None:
             self.num_retrieved_bibtex = 5
             
-
         # instantiate user selections
         self.instantiate_selected_apis()
 
@@ -49,26 +48,29 @@ class Getter:
         except KeyError:
             pass
         except Exception:
-            self.visual.error("Failed to instantiate {} pdf api with supplied params {}.".format(name, params))
+            self.visual.error("Failed to instantiate pdf api: [{}]  with supplied params: {}.".format(name, params))
         try:
             name, params = self.config.get_user_setting("bibtex_getter"), self.config.get_user_setting("bibtex_getter_params")
             self.bibtex_api = self.instantiate_api(name, params)
         except KeyError:
             pass
         except Exception:
-            self.visual.error("Failed to instantiate {} bibtex api with supplied params {}.".format(name, params))
+            self.visual.error("Failed to instantiate  bibtex api: [{}] with supplied params: {}.".format(name, params))
 
 
-    def check_bibtex_api(self):
-        if not self.bibtex_api:
+    def bibtex_api_configured(self):
+        while self.bibtex_api is None:
             res = self.visual.ask_user("Search for bibtex on the web using which tool?", self.bibtex_apis)
+            if res == "q":
+                return False
             params = self.visual.ask_user("Params?")
             self.bibtex_api = self.instantiate_api(res, params)
+        return True
 
     def instantiate_api(self, name, params=None):
         api = self.instantiate(name)
         if not api:
-            self.visual.error("Failed to instantiate api {} with supplied params.".format(name))
+            # self.visual.error("Failed to instantiate api {} with supplied params.".format(name))
             return None
 
         if api.needs_params:
@@ -78,11 +80,14 @@ class Getter:
                 api.configure(params)
         return api
 
-    def check_pdf_api(self):
-        if not self.pdf_api:
+    def pdf_api_configured(self):
+        while self.pdf_api is None:
             res = self.visual.ask_user("Search for pdf on the web using which tool?", self.pdf_apis)
+            if res == "q":
+                return False
             params = self.visual.ask_user("Params?")
-            self.pdf_api = self.instantiate_api(res)
+            self.pdf_api = self.instantiate_api(res, params)
+        return True
 
     def check_create_pdf_dir(self):
         if not exists(self.pdf_dir):
@@ -93,7 +98,8 @@ class Getter:
         return True
 
     def get_web_bibtex(self, query):
-        self.check_bibtex_api()
+        if not self.bibtex_api_configured():
+            return None
         res = self.bibtex_api.get_web_bibtex(query)
         if res:
             res = res[:self.num_retrieved_bibtex]
@@ -104,6 +110,8 @@ class Getter:
         return self.pdf_api.download_web_pdf(web_path, local_output_path)
 
     def search_web_pdf(self, entry_id, entry_title, entry_year):
-        self.check_pdf_api()
+        breakpoint()
+        if not self.pdf_api_configured():
+            return None
         pdf_web_path = self.pdf_api.search_pdf(entry_title, entry_year)
         return self.download_web_pdf(pdf_web_path, entry_id)

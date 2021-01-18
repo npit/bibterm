@@ -68,7 +68,7 @@ class CommandParser:
             matches = [cmd for cmd in self.commands_dict.items() if cmd[-1].lower() == input_cmd]
             if not matches:
                 # check if it's an input list
-                if utils.is_index_list(input_str):
+                if utils.string_is_index_list(input_str):
                     input_cmd, args = self.placeholder_index_list_id, [input_str]
                 else:
                     self.visual.error(f"Undefined command: {input_cmd}, available:")
@@ -162,7 +162,7 @@ class CommandParser:
             return True, [], self.get_command_full_name(exact_command)
 
         # if the current string is a valid selection, update it
-        if utils.is_index_list(inp):
+        if utils.string_is_index_list(inp):
             # set input cache
             self.partial_realtime_input = inp
             return True, [], "indexes"

@@ -48,13 +48,17 @@ class FixRule:
         # default user interaction is boolean confirmation
         return "yes no *Yes-all No-all"
     def parse_confirmation_response(self, response, entry):
+        applied_for_this_entry = False
         if utils.matches(response, "Yes-all"):
             self.decision_for_all_entries = True
+            applied_for_this_entry = True
         elif utils.matches(response, "No-all"):
             self.decision_for_all_entries = False
         if utils.matches(response, "yes"):
             self.apply(entry)
-        return self.decision_for_all_entries
+            applied_for_this_entry = True
+        return applied_for_this_entry, self.decision_for_all_entries
+
     def is_finished(self):
         """Whether interaction is complete"""
         return True
@@ -135,7 +139,7 @@ class TitleFix(FixRule):
         self.message = f"fixed title: {self.fixed_object}"
     def apply(self, entry):
         super().apply(entry)
-        entry.title = self.fixed_object
+        entry.set_title(self.fixed_object)
 
 class IDFix(FixRule):
     """Fix for the entry ID"""

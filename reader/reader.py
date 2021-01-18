@@ -132,39 +132,40 @@ class Reader:
 
     def confirm_and_apply_fix_rule(self, entry, rule, collection):
         """Ask user confirmation for applying a fix"""
-        if self.should_apply_fix_to_all is not None:
-            if self.should_apply_fix_to_all:
-                rule.apply(entry)
+        if self.should_apply_fix_to_all:
+            rule.apply(entry)
             return
+
         while True:
             self.visual.print_entry_contents(entry)
             what = self.visual.ask_user(rule.get_confirmation_message(entry), "edit-manually quit " + rule.get_user_confirmation_options())
             # manual fix with a text editor
             if utils.matches(what, "edit-manually"):
-                collection.remove(entry.ID)
                 updated_entry = Entry.from_string(self.edit_entry_manually(entry))
-                modified = updated_entry.raw_dict != entry.raw_dict
-                collection.add_new_entry(entry)
-                self.visual.message("Fixed entry manually:")
-                self.visual.print_entry_contents(entry)
-                if modified:
+                if updated_entry.raw_dict != entry.raw_dict:
+                    # modified
+                    collection.remove(entry.ID)
+                    collection.add_new_entry(entry)
+                    self.visual.message("Fixed entry manually:")
+                    self.visual.print_entry_contents(entry)
                     collection.set_modified()
                 return
+
             if utils.matches(what, "quit"):
                 self.visual.message("Bye!")
                 exit(1)
 
             # parse via the rule
             try:
-                rule.parse_confirmation_response(what, entry)
+                applied_for_entry, self.should_apply_fix_to_all =  rule.parse_confirmation_response(what, entry)
+                if applied_for_entry:
+                    collection.set_modified()
             except ValueError as ve:
                 self.visual.error(str(ve))
                 break
-            self.should_apply_fix_to_all = rule.decision_for_all_entries
+
             if rule.is_finished():
                 break
-
-        return entry
 
     # Read a collection of entries
     def read_entry_list(self, elist):

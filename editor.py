@@ -9,23 +9,20 @@ from decorators import ignore_arg
 from getters.getter import Getter
 from visual.instantiator import setup
 
-def launch_file_editor(file_path):
-    """Launch file editor"""
-    system(f"vi '{file_path}'")
 
-def edit_manually(data, path=None, return_contents=True):
+def edit_manually(editor, data, path=None, return_contents=True):
     """Write data to a file, launch an editor and return results"""
     if path is None:
         path = join(expanduser("~"), ".config/bib/edit_manually")
     with open(path, "w") as f:
         f.write(data)
-    launch_file_editor(path)
+    system(f"{editor} '{path}'")
     if return_contents:
         with open(path) as f:
             return f.read()
 
-def edit_entry_manually(entry):
-    return edit_manually(json.dumps(entry.raw_dict, indent=2))
+def edit_entry_manually(editor, entry):
+    return edit_manually(editor, json.dumps(entry.raw_dict, indent=2))
 
 class Editor:
 
@@ -37,7 +34,7 @@ class Editor:
         self.pdf_dir = self.config.get_pdf_dir()
 
     def edit_entry_manually(self, entry):
-        return edit_entry_manually(entry)
+        return edit_entry_manually(self.config.get_editor(), entry)
 
     def edit_settings(self, args=None):
         """Function to edit program user settings"""
@@ -55,7 +52,7 @@ class Editor:
         if type(selected) == str and utils.matches(selected, "edit-manually"):
             try:
                 # get manually udpated settings
-                updated_settings = json.loads(edit_manually(json.dumps(curr_settings, indent=2)))
+                updated_settings = json.loads(edit_manually(self.config.get_editor(), json.dumps(curr_settings, indent=2)))
                 # check every k-v pair
                 for key, value in updated_settings.items():
                     self.config.update_user_setting(key, value)
